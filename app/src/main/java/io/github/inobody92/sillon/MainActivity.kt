@@ -19,10 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.ThemeMode
 import io.github.inobody92.sillon.ui.AuthState
 import io.github.inobody92.sillon.ui.LoggedInHost
 import io.github.inobody92.sillon.ui.LoginScreen
+import io.github.inobody92.sillon.ui.OfflineHost
 import io.github.inobody92.sillon.ui.MainViewModel
 import io.github.inobody92.sillon.ui.PlayerViewModel
 import io.github.inobody92.sillon.ui.SillonTheme
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.init(applicationContext)
+        OfflineStore.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             val themeMode by AppSettings.theme.collectAsStateWithLifecycle()
@@ -69,6 +72,7 @@ class MainActivity : ComponentActivity() {
                             onLogin = viewModel::login,
                             modifier = Modifier.safeDrawingPadding(),
                         )
+                        AuthState.Offline -> OfflineHost(playerViewModel, onRetry = viewModel::retryConnection)
                         is AuthState.LoggedIn -> LoggedInHost(s.client, playerViewModel, onLogout = viewModel::logout)
                     }
                 }

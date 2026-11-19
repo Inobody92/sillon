@@ -123,3 +123,9 @@ Paramètre `library` : `personal` ou `shared`.
 - `SYNO.AudioStation.Song` / `getinfo` avec `id=<un seul identifiant>` renvoie le titre. Passer plusieurs identifiants séparés
   par des virgules ne renvoie **que le premier** : faire un appel par titre.
 - `Song.list` renvoie `data.total` (nombre de titres, ou de titres du genre filtré) : base du tirage aléatoire par positions.
+
+## Téléchargement (vérifié, lot 8)
+- Un titre se télécharge avec la même requête que la lecture directe : `SYNO.AudioStation.Stream` / `stream` (qualité originale).
+  Les octets reçus correspondent exactement à `filesize` annoncé par `song_audio`.
+- Session expirée : le NAS répond **HTTP 200 avec du JSON** (et non une erreur HTTP) à la place de l'audio. Vérifier le
+  `Content-Type` avant d'écrire le fichier, se reconnecter puis réessayer.

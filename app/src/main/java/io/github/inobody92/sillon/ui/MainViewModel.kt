@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.inobody92.sillon.data.ApiException
 import io.github.inobody92.sillon.data.Credentials
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.OtpRequiredException
 import io.github.inobody92.sillon.data.SecureStore
 import io.github.inobody92.sillon.data.SessionHolder
@@ -19,6 +20,9 @@ import javax.net.ssl.SSLException
 sealed interface AuthState {
     data object Loading : AuthState
     data class LoggedOut(val error: String? = null, val otpRequired: Boolean = false) : AuthState
+
+    /** NAS injoignable alors que des titres sont téléchargés : on propose l'écoute hors-ligne. */
+    data object Offline : AuthState
     data class LoggedIn(val client: SynoClient) : AuthState
 }
 
@@ -34,6 +38,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val lastInsecure get() = store.lastInsecure()
 
     init {
+        OfflineStore.init(app)
         val saved = store.load()
         if (saved == null) {
             _state.value = AuthState.LoggedOut()
@@ -53,6 +58,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val previous = store.load()
         val deviceId = previous?.takeIf { it.url == normalized && it.account == account }?.deviceId
         connect(Credentials(normalized, account, password, insecure, deviceId), otp?.ifBlank { null }, silent = false)
+    }
+
+    /** Depuis l'écran hors-ligne : retente la connexion avec les identifiants enregistrés. */
+    fun retryConnection() {
+        store.load()?.let { connect(it, otp = null, silent = true) } ?: run { _state.value = AuthState.LoggedOut() }
     }
 
     fun logout() {
@@ -75,7 +85,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: OtpRequiredException) {
                 _state.value = AuthState.LoggedOut(otpRequired = true)
             } catch (e: Exception) {
-                _state.value = AuthState.LoggedOut(error = if (silent) null else describe(e))
+                // Reconnexion automatique impossible faute de réseau : si des titres sont sur le téléphone, on les propose.
+                val unreachable = e is IOException && e !is SSLException
+                _state.value = if (silent && unreachable && OfflineStore.state.value.songs.isNotEmpty()) {
+                    AuthState.Offline
+                } else {
+                    AuthState.LoggedOut(error = if (silent) null else describe(e))
+                }
             }
         }
     }

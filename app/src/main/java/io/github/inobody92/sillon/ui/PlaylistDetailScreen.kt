@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -55,6 +57,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil3.ImageLoader
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Playlist
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
@@ -160,7 +163,10 @@ fun PlaylistDetailScreen(
     onMessage: (String) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
+    onToggleDownload: () -> Unit,
 ) {
+    val offline by OfflineStore.state.collectAsStateWithLifecycle()
+    val collection = offline.collection(OfflineStore.playlistKey(playlist.id))
     val vm: PlaylistDetailViewModel = viewModel(
         key = "playlist/${playlist.id}",
         factory = viewModelFactory { initializer { PlaylistDetailViewModel(client, playlist) } },
@@ -184,6 +190,15 @@ fun PlaylistDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
+                actions = {
+                    IconButton(onClick = onToggleDownload) {
+                        Icon(
+                            if (collection != null) Icons.Filled.DownloadDone else Icons.Filled.Download,
+                            contentDescription = if (collection != null) "Supprimer le téléchargement" else "Télécharger",
+                            tint = if (collection != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -199,6 +214,13 @@ fun PlaylistDetailScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (collection != null) {
+                                Text(
+                                    "Hors-ligne · ${offline.downloadedCount(collection)}/${collection.songIds.size}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                         }
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = { onPlay(songs, 0) }, enabled = songs.isNotEmpty()) {

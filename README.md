@@ -25,7 +25,7 @@ Lots 1 à 5 : connexion au NAS (OTP, device de confiance), albums avec pochettes
 - [x] Filtre par genre sur la grille d'albums
 - [x] Accueil : mix du jour (stable dans la journée, orienté vers les titres peu écoutés) et radios par humeur sans fin (genres modifiables)
 - [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée.
-- [ ] Hors-ligne
+- [x] Hors-ligne : téléchargement d'albums et de playlists (Wi-Fi uniquement par défaut), lecture sans NAS, gestion de l'espace
 - [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée., paroles, édition des tags
 
 ## Compiler

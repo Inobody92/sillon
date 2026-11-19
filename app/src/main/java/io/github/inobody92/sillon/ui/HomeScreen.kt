@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NightsStay
@@ -67,6 +68,7 @@ import coil3.ImageLoader
 import io.github.inobody92.sillon.data.DailyMix
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,8 +115,10 @@ fun HomeScreen(
     libraryGenres: List<String>,
     onPlayMix: (List<Song>) -> Unit,
     onPlayRadio: (Mood) -> Unit,
+    onOpenDownloads: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    val offline by OfflineStore.state.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<Mood?>(null) }
@@ -135,6 +139,28 @@ fun HomeScreen(
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
             item(key = "mix") {
                 MixCard(state, client, imageLoader, onPlay = { onPlayMix(state.mix) }, onRegenerate = { vm.load(true) }, onRetry = { vm.load(false) })
+            }
+            item(key = "offline") {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clickable(onClick = onOpenDownloads),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                            Text("Hors-ligne", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (offline.songs.isEmpty() && offline.pendingCount == 0) {
+                                    "Télécharge des albums et des playlists"
+                                } else {
+                                    "${offline.songs.size} titres · ${formatBytes(offline.bytes)}" +
+                                        if (offline.pendingCount > 0) " · ${offline.pendingCount} en attente" else ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
             item(key = "radio-title") {
                 Text(

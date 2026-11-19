@@ -561,7 +561,8 @@ class SynoClient(val creds: Credentials) {
 
         /** Clé de cache stable pour une URL : on retire le sid, qui change à chaque connexion. */
         fun stableKey(url: String): String =
-            url.toHttpUrl().newBuilder().removeAllQueryParameters("_sid").build().toString()
+            runCatching { url.toHttpUrl().newBuilder().removeAllQueryParameters("_sid").build().toString() }
+                .getOrDefault(url) // adresse locale (file://) : déjà stable
 
         /** Accepte https://hôte[:port] ou hôte[:port] ; refuse le HTTP clair. */
         fun normalizeUrl(input: String): String {

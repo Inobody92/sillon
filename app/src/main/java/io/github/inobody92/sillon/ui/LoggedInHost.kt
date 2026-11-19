@@ -54,6 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.Downloads
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Playlist
 import kotlinx.coroutines.launch
 import io.github.inobody92.sillon.data.Album
@@ -91,6 +94,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showDownloads by rememberSaveable { mutableStateOf(false) }
     var albumsGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var artist by rememberSaveable { mutableStateOf<String?>(null) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
@@ -125,14 +129,56 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     )
 
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
-    BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = showDownloads) { showDownloads = false }
+    BackHandler(enabled = showSettings && !showDownloads) { showSettings = false }
     BackHandler(enabled = showQueue) { showQueue = false }
-    BackHandler(enabled = nowPlaying && !showQueue && !showSettings) { nowPlaying = false }
+    BackHandler(enabled = nowPlaying && !showQueue && !showSettings && !showDownloads) { nowPlaying = false }
     BackHandler(enabled = !nowPlaying && album != null) { album = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist != null) { playlist = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist != null) { artist = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist == null && genre != null) {
         genre = null
+    }
+
+    fun downloadStartMessage() =
+        if (AppSettings.downloadWifiOnly.value && !AppSettings.isUnmetered(context)) {
+            "Téléchargement en attente du Wi-Fi"
+        } else {
+            "Téléchargement lancé"
+        }
+
+    fun toggleAlbumDownload(album: Album) {
+        val key = OfflineStore.albumKey(album)
+        if (OfflineStore.state.value.isPinned(key)) {
+            Downloads.unpin(context, key)
+            showMessage("Téléchargement supprimé")
+        } else {
+            scope.launch {
+                try {
+                    Downloads.pinAlbum(context, client, album)
+                    showMessage(downloadStartMessage())
+                } catch (e: Exception) {
+                    showMessage(e.message ?: "Téléchargement impossible")
+                }
+            }
+        }
+    }
+
+    fun togglePlaylistDownload(playlist: Playlist) {
+        val key = OfflineStore.playlistKey(playlist.id)
+        if (OfflineStore.state.value.isPinned(key)) {
+            Downloads.unpin(context, key)
+            showMessage("Téléchargement supprimé")
+        } else {
+            scope.launch {
+                try {
+                    Downloads.pinPlaylist(context, client, playlist)
+                    showMessage(downloadStartMessage())
+                } catch (e: Exception) {
+                    showMessage(e.message ?: "Téléchargement impossible")
+                }
+            }
+        }
     }
 
     /** Lance tous les titres d'un artiste (chargés à la demande). */
@@ -183,6 +229,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             queueMessage(songs.size, "ajouté à la file")
                         },
                         onShuffle = { songs -> player.play(client, songs.shuffled(), 0, currentAlbum) },
+                        onToggleDownload = { toggleAlbumDownload(currentAlbum) },
                     )
                     currentPlaylist != null -> PlaylistDetailScreen(
                         client = client,
@@ -199,6 +246,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             player.addToQueue(client, listOf(song))
                             queueMessage(1, "ajouté à la file")
                         },
+                        onToggleDownload = { togglePlaylistDownload(currentPlaylist) },
                     )
                     artist != null -> {
                         val name = artist!!
@@ -251,6 +299,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             libraryGenres = browse.genres.map { it.name },
                             onPlayMix = { songs -> player.play(client, songs, 0) },
                             onPlayRadio = { mood -> player.playRadio(mood) },
+                            onOpenDownloads = { showDownloads = true },
                             onSettings = { showSettings = true },
                         )
                     }
@@ -346,7 +395,17 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             SettingsScreen(
                 client = client,
                 onClose = { showSettings = false },
+                onOpenDownloads = { showDownloads = true },
                 onLogout = { showSettings = false; onLogout() },
+            )
+        }
+        if (showDownloads) {
+            DownloadsScreen(
+                client = client,
+                onClose = { showDownloads = false },
+                onRetry = null,
+                onPlay = { songs, index -> player.play(client, songs, index) },
+                onMessage = showMessage,
             )
         }
         if (showQueue && playerUi.hasItem) {

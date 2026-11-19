@@ -118,7 +118,7 @@ fun NowPlayingScreen(
     imageLoader: ImageLoader,
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
-    onAddToPlaylist: (mediaId: String) -> Unit,
+    onAddToPlaylist: ((mediaId: String) -> Unit)?,
 ) {
     val position = rememberPosition(player, active = true)
     var dragging by remember { mutableStateOf(false) }
@@ -217,8 +217,10 @@ fun NowPlayingScreen(
                 IconButton(onClick = onOpenQueue) {
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "File d'attente")
                 }
-                IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
-                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
+                if (onAddToPlaylist != null) {
+                    IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
+                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
+                    }
                 }
             }
             Spacer(Modifier.weight(1f))

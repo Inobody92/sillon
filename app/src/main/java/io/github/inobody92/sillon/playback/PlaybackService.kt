@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -21,6 +22,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.SessionHolder
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +59,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         AppSettings.init(applicationContext)
+        OfflineStore.init(applicationContext)
         tree = LibraryTree(applicationContext)
 
         // Réutilise le client HTTP de la session (certificat auto-signé compris).
@@ -68,15 +71,18 @@ class PlaybackService : MediaLibraryService() {
             if (spec.uri.scheme != MediaItems.SCHEME) {
                 spec
             } else {
-                val client = activeClient() ?: throw IOException("Pas de session Sillon active")
                 val id = spec.uri.getQueryParameter("id") ?: throw IOException("Identifiant de morceau manquant")
+                // Titre téléchargé : on lit le fichier local, sans toucher au NAS (marche hors connexion).
+                val local = OfflineStore.file(id)
+                if (local != null) return@Resolver spec.withUri(Uri.fromFile(local))
+                val client = activeClient() ?: throw IOException("Pas de session Sillon active")
                 val ext = spec.uri.lastPathSegment.orEmpty().substringAfterLast('.', "")
                 val url = client.streamUrl(id, ext, AppSettings.currentQuality(applicationContext))
                     ?: throw IOException("API de streaming absente du NAS")
                 spec.withUri(Uri.parse(url))
             }
         }
-        val dataSourceFactory = ResolvingDataSource.Factory(OkHttpDataSource.Factory(callFactory), resolver)
+        val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, OkHttpDataSource.Factory(callFactory)), resolver)
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))

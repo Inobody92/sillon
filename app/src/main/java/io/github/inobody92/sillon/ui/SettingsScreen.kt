@@ -19,24 +19,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.AudioQuality
+import io.github.inobody92.sillon.data.Downloads
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.SynoClient
 import io.github.inobody92.sillon.data.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onLogout: () -> Unit) {
+fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
+    val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
+    val offline by OfflineStore.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val savedWifi by AppSettings.wifiQuality.collectAsStateWithLifecycle()
     val savedMobile by AppSettings.mobileQuality.collectAsStateWithLifecycle()
     // Sans conversion possible, la qualité réellement appliquée est toujours l'originale.
@@ -88,6 +95,33 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onLogout: () -> Unit
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Section("Hors-ligne")
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Télécharger uniquement en Wi-Fi", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Évite de consommer ta data mobile",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = wifiOnly,
+                        onCheckedChange = {
+                            AppSettings.setDownloadWifiOnly(it)
+                            // Recalcule la contrainte réseau des téléchargements déjà en attente.
+                            if (offline.pendingCount > 0) Downloads.schedule(context, replace = true)
+                        },
+                    )
+                }
+                OutlinedButton(onClick = onOpenDownloads, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Gérer les téléchargements · ${formatBytes(offline.bytes)}")
+                }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Compte")

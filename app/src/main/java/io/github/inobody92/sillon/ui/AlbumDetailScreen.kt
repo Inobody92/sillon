@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
@@ -55,6 +56,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil3.ImageLoader
 import io.github.inobody92.sillon.data.Album
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,7 +102,10 @@ fun AlbumDetailScreen(
     onPlayNext: (List<Song>) -> Unit,
     onAddToQueue: (List<Song>) -> Unit,
     onShuffle: (List<Song>) -> Unit,
+    onToggleDownload: () -> Unit,
 ) {
+    val offline by OfflineStore.state.collectAsStateWithLifecycle()
+    val collection = offline.collection(OfflineStore.albumKey(album))
     val vm: AlbumDetailViewModel = viewModel(
         key = "album/${album.albumArtist}/${album.name}",
         factory = viewModelFactory { initializer { AlbumDetailViewModel(client, album) } },
@@ -131,6 +136,8 @@ fun AlbumDetailScreen(
                         onShuffle = { onShuffle(state.songs) },
                         onPlayNext = { onPlayNext(state.songs) },
                         onAddToQueue = { onAddToQueue(state.songs) },
+                        offlineStatus = collection?.let { "${offline.downloadedCount(it)}/${it.songIds.size}" },
+                        onToggleDownload = onToggleDownload,
                     )
                 }
                 if (state.loading) {
@@ -156,6 +163,7 @@ fun AlbumDetailScreen(
                         onAdd = { onAddToPlaylist(listOf(song)) },
                         onPlayNext = { onPlayNext(listOf(song)) },
                         onAddToQueue = { onAddToQueue(listOf(song)) },
+                        downloaded = song.id in offline.songs,
                     )
                 }
             }
@@ -174,6 +182,8 @@ private fun Header(
     onShuffle: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
+    offlineStatus: String?,
+    onToggleDownload: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -198,6 +208,21 @@ private fun Header(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (offlineStatus != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                        Icon(
+                            Icons.Filled.DownloadDone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            " Hors-ligne · $offlineStatus",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -221,6 +246,10 @@ private fun Header(
                     DropdownMenuItem(text = { Text("Lecture aléatoire") }, onClick = { menu = false; onShuffle() })
                     DropdownMenuItem(text = { Text("Lire ensuite") }, onClick = { menu = false; onPlayNext() })
                     DropdownMenuItem(text = { Text("Ajouter à la file") }, onClick = { menu = false; onAddToQueue() })
+                    DropdownMenuItem(
+                        text = { Text(if (offlineStatus != null) "Supprimer le téléchargement" else "Télécharger") },
+                        onClick = { menu = false; onToggleDownload() },
+                    )
                 }
             }
         }
@@ -235,6 +264,7 @@ private fun SongRow(
     onAdd: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
+    downloaded: Boolean,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -259,6 +289,14 @@ private fun SongRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        if (downloaded) {
+            Icon(
+                Icons.Filled.DownloadDone,
+                contentDescription = "Disponible hors-ligne",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
         }
         Text(
             formatTime(song.durationSec * 1000L),

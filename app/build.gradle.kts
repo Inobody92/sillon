@@ -52,5 +52,6 @@ dependencies {
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.reorderable)
+    implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

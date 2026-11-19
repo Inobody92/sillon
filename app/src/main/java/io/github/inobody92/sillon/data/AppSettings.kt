@@ -39,6 +39,9 @@ object AppSettings {
     private val _mobileQuality = MutableStateFlow(AudioQuality.ORIGINAL)
     val mobileQuality: StateFlow<AudioQuality> = _mobileQuality.asStateFlow()
 
+    private val _downloadWifiOnly = MutableStateFlow(true)
+    val downloadWifiOnly: StateFlow<Boolean> = _downloadWifiOnly.asStateFlow()
+
     /** Idempotent : appelé par l'activité comme par le service, quel que soit celui qui démarre en premier. */
     @Synchronized
     fun init(context: Context) {
@@ -47,6 +50,7 @@ object AppSettings {
         _theme.value = read(K_THEME, ThemeMode.SYSTEM)
         _wifiQuality.value = read(K_WIFI, AudioQuality.ORIGINAL)
         _mobileQuality.value = read(K_MOBILE, AudioQuality.ORIGINAL)
+        _downloadWifiOnly.value = prefs.getBoolean(K_DL_WIFI, true)
     }
 
     fun setTheme(mode: ThemeMode) {
@@ -59,19 +63,27 @@ object AppSettings {
         prefs.edit().putString(K_WIFI, quality.name).apply()
     }
 
+    fun setDownloadWifiOnly(value: Boolean) {
+        _downloadWifiOnly.value = value
+        prefs.edit().putBoolean(K_DL_WIFI, value).apply()
+    }
+
     fun setMobileQuality(quality: AudioQuality) {
         _mobileQuality.value = quality
         prefs.edit().putString(K_MOBILE, quality.name).apply()
     }
 
     /** Qualité à appliquer maintenant : Wi-Fi / Ethernet d'un côté, données mobiles (ou inconnu) de l'autre. */
-    fun currentQuality(context: Context): AudioQuality {
+    fun currentQuality(context: Context): AudioQuality =
+        if (isUnmetered(context)) _wifiQuality.value else _mobileQuality.value
+
+    /** Wi-Fi ou Ethernet : un réseau sur lequel on peut télécharger sans consommer de data mobile. */
+    fun isUnmetered(context: Context): Boolean {
         val cm = context.getSystemService(ConnectivityManager::class.java)
         val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
-        val unmetered = caps != null &&
+        return caps != null &&
             (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
-        return if (unmetered) _wifiQuality.value else _mobileQuality.value
     }
 
     private inline fun <reified E : Enum<E>> read(key: String, default: E): E =
@@ -80,4 +92,5 @@ object AppSettings {
     private const val K_THEME = "theme"
     private const val K_WIFI = "quality_wifi"
     private const val K_MOBILE = "quality_mobile"
+    private const val K_DL_WIFI = "download_wifi_only"
 }

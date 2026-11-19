@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import io.github.inobody92.sillon.data.Album
+import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,10 +66,11 @@ class PlayerController(context: Context) {
         )
     }
 
-    private fun itemsFor(client: SynoClient, songs: List<Song>, album: Album?): List<MediaItem> {
-        val albumArtwork = album?.let { client.coverUrl(it, withSid = true) }?.let(Uri::parse)
+    private fun itemsFor(client: SynoClient?, songs: List<Song>, album: Album?): List<MediaItem> {
+        val albumArtwork = album?.let { client?.coverUrl(it, withSid = true) }?.let(Uri::parse)
         return songs.map { song ->
-            val artwork = albumArtwork ?: client.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
+            // La pochette téléchargée passe en premier : elle s'affiche aussi sans réseau.
+            val artwork = OfflineStore.coverUri(song) ?: albumArtwork ?: client?.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
             MediaItems.song(song, album, artwork)
         }
     }
@@ -77,7 +79,7 @@ class PlayerController(context: Context) {
      * Lance la lecture de [songs] à partir de l'index [startIndex].
      * Si [album] est fourni, sa pochette sert pour tous les morceaux ; sinon, celle de chaque morceau.
      */
-    fun play(client: SynoClient, songs: List<Song>, startIndex: Int, album: Album? = null) {
+    fun play(client: SynoClient?, songs: List<Song>, startIndex: Int, album: Album? = null) {
         if (songs.isEmpty()) return
         val items = itemsFor(client, songs, album)
         withController {
@@ -88,7 +90,7 @@ class PlayerController(context: Context) {
     }
 
     /** Insère [songs] juste après le morceau en cours (ou lance la lecture si la file est vide). */
-    fun playNext(client: SynoClient, songs: List<Song>, album: Album? = null) {
+    fun playNext(client: SynoClient?, songs: List<Song>, album: Album? = null) {
         if (songs.isEmpty()) return
         val items = itemsFor(client, songs, album)
         withController {
@@ -103,7 +105,7 @@ class PlayerController(context: Context) {
     }
 
     /** Ajoute [songs] en fin de file (ou lance la lecture si la file est vide). */
-    fun addToQueue(client: SynoClient, songs: List<Song>, album: Album? = null) {
+    fun addToQueue(client: SynoClient?, songs: List<Song>, album: Album? = null) {
         if (songs.isEmpty()) return
         val items = itemsFor(client, songs, album)
         withController {
