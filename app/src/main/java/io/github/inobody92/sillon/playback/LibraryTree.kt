@@ -162,7 +162,7 @@ class LibraryTree(private val context: Context) {
         MediaItems.folder(MIX, "Mix du jour", "Une sélection pour aujourd'hui", playable = true, type = MediaMetadata.MEDIA_TYPE_PLAYLIST)
 
     private fun moodItem(mood: Mood): MediaItem =
-        MediaItems.folder("radio:${mood.id}", "${mood.emoji} ${mood.label}", "Radio sans fin", playable = true, type = MediaMetadata.MEDIA_TYPE_RADIO_STATION)
+        MediaItems.folder("radio:${mood.id}", mood.label, "Radio sans fin", playable = true, type = MediaMetadata.MEDIA_TYPE_RADIO_STATION)
 
     private fun encodeAlbum(a: Album) = "album:${Uri.encode(a.albumArtist)}|${Uri.encode(a.name)}|${Uri.encode(a.artist)}|${a.year}"
 

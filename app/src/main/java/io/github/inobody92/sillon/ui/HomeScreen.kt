@@ -1,6 +1,7 @@
 package io.github.inobody92.sillon.ui
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,9 +22,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -50,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -245,12 +252,26 @@ private fun MixCard(
     }
 }
 
+/** Icône de chaque humeur (jamais d'émoji : ils rendent différemment selon l'appareil et font bon marché). */
+private fun Mood.icon(): ImageVector = when (this) {
+    Mood.ENERGY -> Icons.Filled.Bolt
+    Mood.CHILL -> Icons.Filled.NightsStay
+    Mood.PARTY -> Icons.Filled.Celebration
+    Mood.NOSTALGIA -> Icons.Filled.History
+}
+
 @Composable
 private fun MoodCard(mood: Mood, genreCount: Int, modifier: Modifier, onPlay: () -> Unit, onEdit: () -> Unit) {
     Card(modifier = modifier.clickable(onClick = onPlay)) {
         Column(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Text(mood.emoji, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(mood.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                Spacer(Modifier.weight(1f))
                 IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.Edit, contentDescription = "Choisir les genres de ${mood.label}", modifier = Modifier.size(18.dp))
                 }
@@ -271,7 +292,7 @@ private fun MoodEditorDialog(mood: Mood, libraryGenres: List<String>, onDismiss:
     var selected by remember { mutableStateOf(MoodStore.genres(context, mood, libraryGenres).toSet()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("${mood.emoji} ${mood.label}") },
+        title = { Text(mood.label) },
         text = {
             Column {
                 Text(
