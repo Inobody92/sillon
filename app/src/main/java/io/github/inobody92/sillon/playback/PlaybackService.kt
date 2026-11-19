@@ -35,6 +35,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.widget.WidgetUpdater
 import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.PlayHistory
@@ -221,6 +222,7 @@ class PlaybackService : MediaLibraryService() {
         })
 
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+        WidgetUpdater(applicationContext, player, scope).start()   // widget de l'écran d'accueil
 
         restoreQueue(player)
         refreshLikeButton()

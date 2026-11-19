@@ -25,6 +25,27 @@
             </intent-filter>
         </activity>
 
+        <!-- Widget de lecture (pochette, titre, boutons) pour l'écran d'accueil. -->
+        <receiver
+            android:name=".widget.SillonWidgetReceiver"
+            android:exported="true"
+            android:label="Sillon">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sillon_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.WidgetRefreshReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Déclare à Android Auto que Sillon est une application média. -->
         <meta-data
             android:name="com.google.android.gms.car.application"

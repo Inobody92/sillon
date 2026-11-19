@@ -92,6 +92,9 @@ fun SettingsScreen(
                     OptionRow(mode.label, selected = theme == mode) { AppSettings.setTheme(mode) }
                 }
 
+                WidgetSection()
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Son")
                 OutlinedButton(onClick = onOpenEqualizer, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text("Égaliseur et préréglages")
@@ -291,6 +294,37 @@ private fun UpdateSection() {
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     ) { Text(if (checking) "Vérification…" else "Vérifier maintenant") }
     status?.let {
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+/** Propose d'épingler le widget de lecture sur l'écran d'accueil (Android demande la confirmation). */
+@Composable
+private fun WidgetSection() {
+    val context = LocalContext.current
+    var message by remember { mutableStateOf<String?>(null) }
+    Section("Widget")
+    Text(
+        "Pochette, titre et boutons de lecture directement sur l'écran d'accueil.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    OutlinedButton(
+        onClick = {
+            val manager = android.appwidget.AppWidgetManager.getInstance(context)
+            message = if (manager.isRequestPinAppWidgetSupported) {
+                manager.requestPinAppWidget(
+                    android.content.ComponentName(context, io.github.inobody92.sillon.widget.SillonWidgetReceiver::class.java), null, null,
+                )
+                null
+            } else {
+                "Ton écran d'accueil ne permet pas d'ajouter un widget d'ici : appuie longuement sur l'écran d'accueil, puis Widgets, puis Sillon."
+            }
+        },
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    ) { Text("Ajouter à l'écran d'accueil") }
+    message?.let {
         Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
     }
 }

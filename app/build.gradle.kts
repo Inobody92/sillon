@@ -26,8 +26,8 @@ android {
         applicationId = "io.github.inobody92.sillon$appIdSuffix"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.4.1"
+        versionCode = 9
+        versionName = "1.5.0"
     }
 
     signingConfigs {
@@ -86,6 +86,8 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.reorderable)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

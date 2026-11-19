@@ -29,6 +29,8 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - Ajout de musique depuis l'application (facultatif) : recherche d'une chanson ou d'un artiste, envoi vers la
   bibliothèque et suivi de l'avancement, via ton propre serveur de téléchargement (contrat décrit dans
   [`docs/DOWNLOAD_SERVER.md`](docs/DOWNLOAD_SERVER.md)). Invisible tant qu'aucune adresse n'est saisie dans les réglages
+- Widget d'écran d'accueil (Réglages → Widget → Ajouter) : pochette, titre, artiste et boutons précédent / lecture /
+  suivant, aux couleurs de l'application, avec trois tailles (pochette seule, bandeau, grand format)
 - Égaliseur avec 11 préréglages (basses, voix, rock, jazz, loudness…) et réglage fin sur 5 fréquences, appliqué à toute
   la lecture (haut-parleur, Bluetooth, voiture)
 - Écran de lecture au choix : platine vinyle (45 tours, bras de lecture qui sert de curseur), égaliseur à segments

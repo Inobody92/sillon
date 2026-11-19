@@ -19,6 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
+import kotlinx.coroutines.launch
+import androidx.glance.appwidget.updateAll
+import io.github.inobody92.sillon.widget.SillonWidget
+import androidx.lifecycle.lifecycleScope
 import io.github.inobody92.sillon.data.DownloadServerStore
 import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.Likes
@@ -45,6 +49,8 @@ class MainActivity : ComponentActivity() {
         Likes.init(applicationContext)
         LibraryIndex.init(applicationContext)
         DownloadServerStore.init(applicationContext)
+        // Le widget se redessine à chaque ouverture : il reflète toujours le dernier état connu.
+        lifecycleScope.launch { SillonWidget().updateAll(applicationContext) }
         enableEdgeToEdge()
         setContent {
             val themeMode by AppSettings.theme.collectAsStateWithLifecycle()

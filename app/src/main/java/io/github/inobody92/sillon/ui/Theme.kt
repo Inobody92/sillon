@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.LocalContext
  *      clair  : texte 16,6:1 / 13:1, texte secondaire 8,2:1 / 6,4:1, accent 9,4:1 / 7,4:1
  *  - Les écrans n'utilisent jamais de couleur en dur : uniquement ces rôles sémantiques.
  */
-private val SillonDark = darkColorScheme(
+internal val SillonDark = darkColorScheme(
     primary = Color(0xFFF5A5AA),
     onPrimary = Color(0xFF3D1017),
     primaryContainer = Color(0xFF5C2229),
@@ -60,7 +60,7 @@ private val SillonDark = darkColorScheme(
     surfaceContainerHighest = Color(0xFF302626),
 )
 
-private val SillonLight = lightColorScheme(
+internal val SillonLight = lightColorScheme(
     primary = Color(0xFF7B2432),
     onPrimary = Color(0xFFFFFAFB),
     primaryContainer = Color(0xFFFED3D5),
