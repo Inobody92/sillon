@@ -242,7 +242,17 @@ fun AddMusicScreen(
                 item(key = "modes") {
                     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AddMode.entries.forEach { mode ->
-                            FilterChip(selected = state.mode == mode, onClick = { query = ""; vm.setMode(mode) }, label = { Text(mode.label) })
+                            FilterChip(
+                                selected = state.mode == mode,
+                                onClick = {
+                                    // Le texte saisi est conservé. Entre chanson et artiste on relance la recherche avec lui ;
+                                    // le mode lien garde le texte tel quel (c'est peut-être un lien collé).
+                                    val betweenSearches = state.mode != AddMode.LINK && mode != AddMode.LINK
+                                    vm.setMode(mode)
+                                    if (betweenSearches && query.trim().length >= 2) vm.search(query)
+                                },
+                                label = { Text(mode.label) },
+                            )
                         }
                     }
                 }

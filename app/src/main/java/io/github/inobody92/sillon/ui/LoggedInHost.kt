@@ -301,7 +301,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                         selected = tab == index,
                         onClick = { tab = index; resetNavigation() },
                         icon = { Icon(icon, contentDescription = null) },
-                        label = { Text(label) },
+                        label = { FitLabel(label) },
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -458,7 +458,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                                 selected = tab == index,
                                 onClick = { tab = index; resetNavigation() },
                                 icon = { Icon(icon, contentDescription = null) },
-                                label = { Text(label) },
+                                label = { FitLabel(label) },
                             )
                         }
                     }
