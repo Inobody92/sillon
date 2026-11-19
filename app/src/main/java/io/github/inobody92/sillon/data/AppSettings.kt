@@ -39,6 +39,9 @@ object AppSettings {
     private val _mobileQuality = MutableStateFlow(AudioQuality.ORIGINAL)
     val mobileQuality: StateFlow<AudioQuality> = _mobileQuality.asStateFlow()
 
+    private val _dynamicColors = MutableStateFlow(false)
+    val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
+
     private val _autoDownloadLikes = MutableStateFlow(true)
     val autoDownloadLikes: StateFlow<Boolean> = _autoDownloadLikes.asStateFlow()
 
@@ -59,6 +62,7 @@ object AppSettings {
         _downloadWifiOnly.value = prefs.getBoolean(K_DL_WIFI, true)
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
+        _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
     }
 
     fun setTheme(mode: ThemeMode) {
@@ -69,6 +73,11 @@ object AppSettings {
     fun setWifiQuality(quality: AudioQuality) {
         _wifiQuality.value = quality
         prefs.edit().putString(K_WIFI, quality.name).apply()
+    }
+
+    fun setDynamicColors(value: Boolean) {
+        _dynamicColors.value = value
+        prefs.edit().putBoolean(K_DYNAMIC, value).apply()
     }
 
     fun setAutoDownloadLikes(value: Boolean) {
@@ -113,4 +122,5 @@ object AppSettings {
     private const val K_DL_WIFI = "download_wifi_only"
     private const val K_CACHE_MB = "cache_max_mb"
     private const val K_AUTO_LIKES = "auto_download_likes"
+    private const val K_DYNAMIC = "dynamic_colors"
 }

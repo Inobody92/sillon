@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            SillonTheme(dark) {
+            val dynamic by AppSettings.dynamicColors.collectAsStateWithLifecycle()
+            SillonTheme(dark, dynamicColors = dynamic) {
                 Surface(Modifier.fillMaxSize()) {
                     val state by viewModel.state.collectAsStateWithLifecycle()
                     when (val s = state) {

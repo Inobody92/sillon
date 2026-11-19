@@ -1,5 +1,6 @@
 package io.github.inobody92.sillon.ui
 
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ import io.github.inobody92.sillon.data.ThemeMode
 @Composable
 fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
+    val dynamicColors by AppSettings.dynamicColors.collectAsStateWithLifecycle()
     val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
     val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
