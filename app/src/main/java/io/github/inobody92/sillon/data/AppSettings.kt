@@ -8,6 +8,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Ce que le lecteur affiche au centre de l'écran de lecture. */
+enum class PlayerVisual(val label: String) {
+    TURNTABLE("Platine vinyle"),
+    EQUALIZER("Égaliseur"),
+    COVER("Pochette"),
+}
+
 enum class ThemeMode(val label: String) {
     SYSTEM("Suivre le système"),
     LIGHT("Clair"),
@@ -39,8 +46,8 @@ object AppSettings {
     private val _mobileQuality = MutableStateFlow(AudioQuality.ORIGINAL)
     val mobileQuality: StateFlow<AudioQuality> = _mobileQuality.asStateFlow()
 
-    private val _turntable = MutableStateFlow(true)
-    val turntable: StateFlow<Boolean> = _turntable.asStateFlow()
+    private val _playerVisual = MutableStateFlow(PlayerVisual.TURNTABLE)
+    val playerVisual: StateFlow<PlayerVisual> = _playerVisual.asStateFlow()
 
     private val _dynamicColors = MutableStateFlow(false)
     val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
@@ -66,7 +73,10 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
-        _turntable.value = prefs.getBoolean(K_TURNTABLE, true)
+        _playerVisual.value = prefs.getString(K_VISUAL, null)
+            ?.let { name -> PlayerVisual.entries.firstOrNull { it.name == name } }
+            // Ancien réglage booléen : platine ou pochette seule.
+            ?: if (prefs.getBoolean(K_TURNTABLE, true)) PlayerVisual.TURNTABLE else PlayerVisual.COVER
     }
 
     fun setTheme(mode: ThemeMode) {
@@ -79,9 +89,9 @@ object AppSettings {
         prefs.edit().putString(K_WIFI, quality.name).apply()
     }
 
-    fun setTurntable(value: Boolean) {
-        _turntable.value = value
-        prefs.edit().putBoolean(K_TURNTABLE, value).apply()
+    fun setPlayerVisual(value: PlayerVisual) {
+        _playerVisual.value = value
+        prefs.edit().putString(K_VISUAL, value.name).apply()
     }
 
     fun setDynamicColors(value: Boolean) {
@@ -133,4 +143,5 @@ object AppSettings {
     private const val K_AUTO_LIKES = "auto_download_likes"
     private const val K_DYNAMIC = "dynamic_colors"
     private const val K_TURNTABLE = "turntable"
+    private const val K_VISUAL = "player_visual"
 }

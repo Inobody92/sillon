@@ -21,7 +21,10 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -63,6 +66,7 @@ import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
 import io.github.inobody92.sillon.playback.SleepState
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.PlayerVisual
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -149,14 +153,28 @@ fun NowPlayingScreen(
             Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(Modifier.fillMaxWidth()) {
+            val visual by AppSettings.playerVisual.collectAsStateWithLifecycle()
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 IconButton(onClick = onClose) {
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Réduire")
                 }
+                // Affiche l'icône du mode suivant : platine, égaliseur, pochette, puis retour à la platine.
+                val next = PlayerVisual.entries[(visual.ordinal + 1) % PlayerVisual.entries.size]
+                IconButton(onClick = { AppSettings.setPlayerVisual(next) }) {
+                    Icon(
+                        when (next) {
+                            PlayerVisual.TURNTABLE -> Icons.Filled.Album
+                            PlayerVisual.EQUALIZER -> Icons.Filled.GraphicEq
+                            PlayerVisual.COVER -> Icons.Filled.Image
+                        },
+                        contentDescription = "Affichage : ${next.label}",
+                    )
+                }
             }
             Spacer(Modifier.weight(0.5f))
-            val useTurntable by AppSettings.turntable.collectAsStateWithLifecycle()
-            if (useTurntable) {
+            if (visual == PlayerVisual.EQUALIZER) {
+                EqualizerView(playing = ui.isPlaying, onTogglePlay = player::togglePlay)
+            } else if (visual == PlayerVisual.TURNTABLE) {
                 Turntable(
                     artwork = ui.artwork,
                     imageLoader = imageLoader,

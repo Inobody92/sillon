@@ -45,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import io.github.inobody92.sillon.data.SynoClient
+import io.github.inobody92.sillon.data.PlayerVisual
 import io.github.inobody92.sillon.data.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,7 +53,7 @@ import io.github.inobody92.sillon.data.ThemeMode
 fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
     val dynamicColors by AppSettings.dynamicColors.collectAsStateWithLifecycle()
-    val turntable by AppSettings.turntable.collectAsStateWithLifecycle()
+    val visual by AppSettings.playerVisual.collectAsStateWithLifecycle()
     val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
     val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
@@ -81,6 +82,11 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () 
                 Section("Apparence")
                 ThemeMode.entries.forEach { mode ->
                     OptionRow(mode.label, selected = theme == mode) { AppSettings.setTheme(mode) }
+                }
+
+                Section("Écran de lecture")
+                PlayerVisual.entries.forEach { v ->
+                    OptionRow(v.label, selected = visual == v) { AppSettings.setPlayerVisual(v) }
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

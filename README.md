@@ -26,6 +26,8 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - Minuteur de sommeil : dans N minutes (le son baisse doucement), à la fin du titre ou de la file
 - Radios par humeur sans fin (Énergie, Chill, Fête, Nostalgie), construites sur les genres de ta bibliothèque
 - Qualité audio Wi-Fi / mobile, si le NAS sait convertir en MP3
+- Écran de lecture au choix : platine vinyle (45 tours, bras de lecture qui sert de curseur), égaliseur à segments
+  piloté par le son réellement joué (analyse en direct, rien n'est envoyé nulle part), ou pochette seule
 
 **Playlists et favoris**
 - Création, ajout, retrait, réordonnancement par glisser-déposer, renommage, suppression

@@ -16,7 +16,13 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import android.content.Context
+import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
@@ -124,7 +130,19 @@ class PlaybackService : MediaLibraryService() {
         }
         val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, cacheFactory), offlineResolver)
 
-        val player = ExoPlayer.Builder(this)
+        // L'audio décodé passe par un « tap » (lecture seule) qui alimente l'égaliseur de l'écran de lecture.
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .setAudioProcessors(arrayOf<AudioProcessor>(TeeAudioProcessor(SpectrumTap())))
+                .build()
+        }
+        val player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
