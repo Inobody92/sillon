@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import io.github.inobody92.sillon.data.SynoClient
 import io.github.inobody92.sillon.data.PlayerVisual
+import io.github.inobody92.sillon.data.UpdateChecker
 import io.github.inobody92.sillon.data.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,6 +208,9 @@ fun SettingsScreen(
                 DownloadServerSection()
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                UpdateSection()
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Compte")
                 Text(
                     "${client.creds.account} · ${client.creds.url.removePrefix("https://")}",
@@ -244,5 +249,48 @@ private fun OptionRow(label: String, selected: Boolean, enabled: Boolean = true,
             color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
         )
+    }
+}
+
+/** Réglage de la vérification de mise à jour, avec un bouton pour la lancer tout de suite. */
+@Composable
+private fun UpdateSection() {
+    val enabled by AppSettings.checkUpdates.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+
+    Section("Mises à jour")
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Vérifier au lancement", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Une requête anonyme vers GitHub, au plus toutes les 12 h, pour savoir si une nouvelle version existe. " +
+                    "Rien n'est installé sans ta confirmation.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = { AppSettings.setCheckUpdates(it) })
+    }
+    OutlinedButton(
+        onClick = {
+            checking = true
+            status = null
+            scope.launch {
+                status = when (val r = UpdateChecker.checkNow(context.applicationContext)) {
+                    UpdateChecker.Result.UpToDate -> "Sillon est à jour (${UpdateChecker.installedVersion(context)})."
+                    UpdateChecker.Result.Failed -> "Vérification impossible : GitHub est injoignable."
+                    is UpdateChecker.Result.Available -> "La version ${r.release.version} est disponible."
+                }
+                checking = false
+            }
+        },
+        enabled = !checking,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    ) { Text(if (checking) "Vérification…" else "Vérifier maintenant") }
+    status?.let {
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
     }
 }

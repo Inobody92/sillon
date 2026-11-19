@@ -61,6 +61,10 @@ object AppSettings {
     private val _eqGains = MutableStateFlow(EqPresets.all.first().gains)
     val eqGains: StateFlow<List<Float>> = _eqGains.asStateFlow()
 
+    private val _checkUpdates = MutableStateFlow(true)
+    /** Vérifier au lancement si une version plus récente existe (une requête anonyme vers GitHub). */
+    val checkUpdates: StateFlow<Boolean> = _checkUpdates.asStateFlow()
+
     private val _dynamicColors = MutableStateFlow(false)
     val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
 
@@ -85,6 +89,7 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
+        _checkUpdates.value = prefs.getBoolean(K_CHECK_UPDATES, true)
         _eqEnabled.value = prefs.getBoolean(K_EQ_ON, false)
         _eqPreset.value = prefs.getString(K_EQ_PRESET, null) ?: EqPresets.NEUTRAL_ID
         _eqGains.value = EqPresets.decode(prefs.getString(K_EQ_GAINS, null))
@@ -108,6 +113,16 @@ object AppSettings {
         _playerVisual.value = value
         prefs.edit().putString(K_VISUAL, value.name).apply()
     }
+
+    fun setCheckUpdates(value: Boolean) {
+        _checkUpdates.value = value
+        prefs.edit().putBoolean(K_CHECK_UPDATES, value).apply()
+    }
+
+    fun lastUpdateCheck(): Long = prefs.getLong(K_LAST_UPDATE, 0L)
+    fun markUpdateChecked(now: Long) = prefs.edit().putLong(K_LAST_UPDATE, now).apply()
+    fun ignoredUpdate(): String? = prefs.getString(K_IGNORED_UPDATE, null)
+    fun ignoreUpdate(version: String) = prefs.edit().putString(K_IGNORED_UPDATE, version).apply()
 
     fun setEqEnabled(value: Boolean) {
         _eqEnabled.value = value
@@ -179,6 +194,9 @@ object AppSettings {
     private const val K_DYNAMIC = "dynamic_colors"
     private const val K_TURNTABLE = "turntable"
     private const val K_VISUAL = "player_visual"
+    private const val K_CHECK_UPDATES = "check_updates"
+    private const val K_LAST_UPDATE = "last_update_check"
+    private const val K_IGNORED_UPDATE = "ignored_update"
     private const val K_EQ_ON = "eq_enabled"
     private const val K_EQ_PRESET = "eq_preset"
     private const val K_EQ_GAINS = "eq_gains"

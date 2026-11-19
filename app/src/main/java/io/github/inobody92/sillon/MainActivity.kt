@@ -31,6 +31,7 @@ import io.github.inobody92.sillon.ui.OfflineHost
 import io.github.inobody92.sillon.ui.MainViewModel
 import io.github.inobody92.sillon.ui.PlayerViewModel
 import io.github.inobody92.sillon.ui.SillonTheme
+import io.github.inobody92.sillon.ui.UpdatePrompt
 
 class MainActivity : ComponentActivity() {
 
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
             }
             val dynamic by AppSettings.dynamicColors.collectAsStateWithLifecycle()
             SillonTheme(dark, dynamicColors = dynamic) {
+                UpdatePrompt()
                 Surface(Modifier.fillMaxSize()) {
                     val state by viewModel.state.collectAsStateWithLifecycle()
                     when (val s = state) {

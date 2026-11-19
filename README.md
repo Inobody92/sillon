@@ -107,8 +107,11 @@ app/src/main/java/io/github/inobody92/sillon/
 
 ## Confidentialité et sécurité
 
-- Aucun serveur tiers, aucune télémétrie. L'application ne parle qu'à ton NAS (et, si tu utilises QuickConnect, au
-  service de résolution de Synology pour retrouver son adresse).
+- Aucune télémétrie, aucun compte. L'application parle à ton NAS (et, si tu utilises QuickConnect, au service de
+  résolution de Synology pour retrouver son adresse), plus, si tu l'as configuré, à ton serveur de téléchargement.
+- **Vérification de mise à jour** : au lancement, au plus toutes les 12 h, Sillon demande à GitHub (adresse
+  `api.github.com`) si une version plus récente est publiée. La requête est anonyme et GitHub y voit seulement ton
+  adresse IP. Rien n'est installé sans ta confirmation. Tu peux la couper dans *Réglages → Mises à jour*.
 - Le mot de passe est chiffré avec une clé non exportable du Keystore Android.
 - Les sauvegardes Android sont désactivées (`allowBackup=false`).
 - L'historique d'écoute reste sur le téléphone.
@@ -133,6 +136,17 @@ via GitHub Actions.
 
 Sans ces identifiants, la variante release est construite non signée. Garde une sauvegarde de ta clé : sans elle, tu
 ne pourras plus publier de mise à jour installable par-dessus l'ancienne version.
+
+**Publier une version.** Une release GitHub se crée toute seule quand on pousse un tag :
+
+1. Monte `versionCode` et `versionName` dans `app/build.gradle.kts`, puis commite.
+2. Une seule fois : `scripts/configurer-secrets-release.sh` envoie ta clé de signature dans les secrets chiffrés du
+   dépôt (`gh auth login` d'abord). Elle ne passe jamais par le dépôt lui-même.
+3. `git tag v1.5.0 && git push origin v1.5.0` : le workflow [`release.yml`](.github/workflows/release.yml) vérifie que
+   le tag correspond à `versionName`, lance les tests, construit et signe l'APK, contrôle sa signature, puis publie la
+   release avec `Sillon-1.5.0.apk` et son empreinte SHA-256. Sans les secrets de signature, il s'arrête sans rien publier.
+
+Les applications déjà installées proposent alors la mise à jour au prochain lancement.
 
 ## Limites connues
 
