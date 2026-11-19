@@ -1,0 +1,90 @@
+# Protocole Audio Station (API web Synology)
+
+
+## Principe général
+- Tout passe en HTTP(S) **POST form-urlencoded** sur `https://<nas>:<port>/webapi/<path>`.
+- Chaque appel envoie : `api=<SYNO.xxx>`, `method=<m>`, `version=<n>`, `_sid=<session>`.
+- Réponses JSON : `{ "success": bool, "data": {...}, "error": {"code": n} }`.
+- Le `<path>` n'est pas figé : il se découvre via `SYNO.API.Info`.
+
+## 1. Découverte des APIs
+`GET/POST /webapi/query.cgi` avec `api=SYNO.API.Info&method=query&version=1&query=all`
+→ renvoie pour chaque API `{path, minVersion, maxVersion}`.
+L'app en déduit ses capacités (version max) :
+| Capacité | Condition |
+|---|---|
+| Notation | `Song` >= v2 |
+| Partage de playlists | `Playlist` >= v2 |
+| Dossier récursif | `Folder` >= v3 |
+| Genre > artiste | `Artist` >= v3 |
+| Pin | `Pin` >= v1 |
+| Ajouter ensuite | `RemotePlayer` >= v3 |
+| Device de confiance | `SYNO.API.Auth` >= v6 |
+
+## 2. Authentification
+1. (optionnel) `SYNO.API.Encryption` / `getinfo` v1 : clé publique si le NAS impose le chiffrement du mot de passe.
+2. `SYNO.API.Auth` / `login` (version = max supportée, 1 par défaut) avec :
+   `account`, `passwd`, `session=AudioStation`, `client_time`,
+   et si 2FA : `otp_code`, `enable_device_token`, `device_id`, `device_name`.
+3. La réponse contient le `sid` → à passer en `_sid` partout.
+4. Déconnexion : `SYNO.API.Auth` / `logout` v1.
+Note : v5 = OTP imposé, v6 = device de confiance (évite de redemander l'OTP).
+
+## 3. APIs Audio Station
+`Info, Album, Artist, Composer, Cover, Folder, Genre, Lyrics, LyricsSearch, Pin,
+Playlist, Proxy, Radio, RemotePlayer, RemotePlayerStatus, Song, Stream`
+(toutes préfixées `SYNO.AudioStation.`)
+
+Pagination : `offset` / `limit` (l'app utilise pages de 1024, `limit=-1` = tout).
+Paramètre `library` : `personal` ou `shared`.
+
+### Playlists (`SYNO.AudioStation.Playlist`) — déjà gérées par le serveur
+| method | params | rôle |
+|---|---|---|
+| `list` | offset, limit, library (v2 si partage) | lister |
+| `getinfo` | id, additional=songs,songs_total... | détail |
+| `create` | name, library, songs=<ids> | créer |
+| `updatesongs` | id, offset, limit, songs=<ids> | modifier le contenu (remplace la plage offset/limit) |
+| `rename` | id, new_name | renommer |
+| `delete` | id | supprimer |
+| `updatesmart` | critères | playlist intelligente |
+| `copytolibrary` | id | copier perso/partagée |
+| `editsharing` (v2) | | partage |
+=> **La limite "pas de playlists" est uniquement dans l'UI de l'app, pas dans l'API.**
+
+### Lecture (`SYNO.AudioStation.Stream`)
+- Direct : `/webapi/<path>?api=SYNO.AudioStation.Stream&method=stream&version=1&id=<songId>&_sid=<sid>&ext=.<ext>`
+- Transcodage : `method=transcode&format=mp3|wav&bitrate=<kbps>&ext=.mp3`
+- Chromecast : ajoute `&position=0`
+- Streaming HTTP simple -> lisible tel quel par un lecteur natif (AVPlayer, ExoPlayer, mpv...).
+
+### Pochettes
+`SYNO.AudioStation.Cover` (`getsongcover`, `getfoldercover`, `getcover`).
+
+### Autres
+`Song` : `list`, `search`, `getinfo`, `setrating`, `getsharing`/`setsharing`.
+`Folder` : `list` (navigation dossiers). `Radio` : `list`. `Lyrics` : `getlyrics`, `searchlyrics`.
+`Pin` : `list`, `pin`, `unpin`, `rename`, `reorder`.
+`RemotePlayer` / `RemotePlayerStatus` : contrôle des lecteurs distants (hors périmètre MVP).
+
+## Confirmé sur le NAS réel (DSM, test du nas_probe.py)
+- Chemins réels : `/webapi/AudioStation/<api>.cgi` (album, artist, song, stream, playlist, cover...) ;
+  `SYNO.API.Auth`, `Encryption`, `Pin`, `Tag`, `Browse.Playlist` sont sur `/webapi/entry.cgi`.
+  -> toujours passer par `query.cgi`, ne pas coder les chemins en dur.
+- `SYNO.API.Auth` v1-v7 : login OK avec mot de passe en clair (HTTPS), `format=sid`, sans passer par `Encryption`.
+- Versions : Song v1-3, Album v1-3, Artist v1-4, Playlist v1-3, Stream v1-2, Cover v1-3, Search v1 (API de recherche dédiée, absente de l'ancienne app).
+- IDs : morceau `music_97817` ; playlist `playlist_personal_normal/<nom>` (la playlist système `__SYNO_AUDIO_SHARED_SONGS__` existe par défaut).
+- `Song.list` avec `additional=song_tag,song_audio,song_rating` renvoie tags (album, album_artist, artist, comment...), audio (codec, bitrate, container, duration, filesize, frequency) et note.
+- `Album.list` : `data.albums[]` + `data.total`.
+- Info : `privilege.playlist_edit=true`, `enable_personal_library=true`, `playing_queue_max=8192`.
+- Exemple de fichiers : AAC/mp4 ~129 kbps -> lisibles en direct par ExoPlayer, pas de transcodage nécessaire.
+- CRUD playlist VALIDÉ : `create` (name, library=personal, songs=id1,id2) -> `data.id = "playlist_personal_normal/1"` ;
+  `getinfo` (id, additional=songs,songs_total) -> `data.playlists[0].additional.songs[]` (id, path, title, type) + `songs_total` ;
+  `delete` (id) -> `{"success":true,"data":{"errors":[]}}`.
+- Nouveautés exploitables : `Download`, `Search`, `Tag` (édition de tags), `WebPlayer`.
+
+## À vérifier avant de coder (pas encore confirmé dans le décompilé)
+- Valeurs exactes du paramètre `additional` par endpoint (song_tag, song_audio, song_rating...).
+- Format précis de chiffrement du mot de passe quand `Encryption` est actif.
+- Endpoint `Song.list` : paramètres de tri/filtre (sort_by, sort_direction, filter).
+- Les versions réelles exposées par TON NAS (`query.cgi?query=all`).
