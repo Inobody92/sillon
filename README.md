@@ -11,11 +11,11 @@ fichiers) avec une application neuve : Kotlin, Jetpack Compose, Media3.
 
 ## État
 
-Très tôt : le squelette compile. Le protocole est documenté dans [`docs/API.md`](docs/API.md).
+Lot 1 en cours : connexion au NAS (OTP, device de confiance, certificat auto-signé optionnel) et grille d'albums avec pochettes. Le protocole est documenté dans [`docs/API.md`](docs/API.md).
 
 ## Feuille de route
 
-- [ ] Connexion (adresse, compte, OTP) et stockage sécurisé
+- [x] Connexion (adresse, compte, OTP) et stockage sécurisé
 - [ ] Bibliothèque : albums, artistes, morceaux, pochettes
 - [ ] Lecteur : file d'attente, arrière-plan, écran de verrouillage
 - [ ] Playlists : création, édition, réordonnancement
