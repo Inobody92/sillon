@@ -56,9 +56,20 @@ object OfflineStore {
     @Synchronized
     fun init(context: Context) {
         if (::root.isInitialized) return
-        root = File(context.applicationContext.filesDir, "offline").apply { mkdirs() }
+        setUp(File(context.applicationContext.filesDir, "offline"))
+    }
+
+    /** Réinitialise le magasin dans [dir] (tests) : simule aussi un redémarrage de l'application. */
+    @Synchronized
+    internal fun initForTest(dir: File) = setUp(dir)
+
+    private fun setUp(dir: File) {
+        root = dir.apply { mkdirs() }
         covers = File(root, "covers").apply { mkdirs() }
         index = File(root, "index.json")
+        songs.clear()
+        pending.clear()
+        collections.clear()
         load()
         publish()
     }

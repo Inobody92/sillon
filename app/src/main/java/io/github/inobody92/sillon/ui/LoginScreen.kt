@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -34,6 +36,8 @@ fun LoginScreen(
     initialAccount: String,
     initialInsecure: Boolean,
     onLogin: (url: String, account: String, password: String, insecure: Boolean, otp: String?) -> Unit,
+    onConfirmCertificate: () -> Unit,
+    onRejectCertificate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var url by rememberSaveable { mutableStateOf(initialUrl) }
@@ -60,8 +64,8 @@ fun LoginScreen(
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },
-            label = { Text("Adresse du NAS") },
-            placeholder = { Text("monnas.synology.me:5001") },
+            label = { Text("Adresse du NAS ou ID QuickConnect") },
+            placeholder = { Text("monnas.synology.me:5001 ou mon-id") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
@@ -128,5 +132,38 @@ fun LoginScreen(
             enabled = url.isNotBlank() && account.isNotBlank() && password.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Se connecter") }
+    }
+
+    state.certificate?.let { request ->
+        AlertDialog(
+            onDismissRequest = onRejectCertificate,
+            title = { Text("Faire confiance à ce certificat ?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    if (request.previousSha256 != null) {
+                        Text(
+                            "ATTENTION : ce NAS présente un certificat DIFFÉRENT de celui que tu avais accepté. " +
+                                "C'est normal si tu l'as renouvelé ; sinon, quelqu'un se fait peut-être passer pour ton NAS.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    Text(
+                        "Ce NAS utilise un certificat auto-signé. Compare l'empreinte ci-dessous avec celle affichée " +
+                            "dans DSM (Panneau de configuration, Sécurité, Certificat) avant d'accepter.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Empreinte SHA-256", style = MaterialTheme.typography.labelMedium)
+                    Text(request.info.formatted, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Sujet : ${request.info.subject}", style = MaterialTheme.typography.bodySmall)
+                    Text("Valable jusqu'au : ${request.info.notAfter}", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = onConfirmCertificate) { Text("Faire confiance") } },
+            dismissButton = { TextButton(onClick = onRejectCertificate) { Text("Annuler") } },
+        )
     }
 }

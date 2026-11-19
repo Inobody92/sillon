@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
                             initialAccount = viewModel.lastAccount,
                             initialInsecure = viewModel.lastInsecure,
                             onLogin = viewModel::login,
+                            onConfirmCertificate = viewModel::confirmCertificate,
+                            onRejectCertificate = viewModel::rejectCertificate,
                             modifier = Modifier.safeDrawingPadding(),
                         )
                         AuthState.Offline -> OfflineHost(playerViewModel, onRetry = viewModel::retryConnection)

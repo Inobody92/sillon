@@ -23,6 +23,10 @@ data class Credentials(
     val password: String,
     val insecure: Boolean,
     val deviceId: String? = null,
+    /** Empreinte SHA-256 du certificat auto-signé accepté par l'utilisateur (obligatoire si [insecure]). */
+    val pinnedSha256: String? = null,
+    /** ID QuickConnect saisi à la place d'une adresse : sert à retrouver l'adresse du NAS si elle change. */
+    val quickConnectId: String? = null,
 )
 
 data class ApiInfo(val path: String, val minVersion: Int, val maxVersion: Int)
@@ -88,7 +92,7 @@ object SessionHolder {
  */
 class SynoClient(val creds: Credentials) {
 
-    val http: OkHttpClient = buildHttp(creds.insecure)
+    val http: OkHttpClient = buildHttp(creds)
 
     private var apis: Map<String, ApiInfo> = emptyMap()
 
@@ -605,23 +609,23 @@ class SynoClient(val creds: Credentials) {
             val t = input.trim().trimEnd('/')
             require(t.isNotEmpty()) { "Adresse vide" }
             require(!t.startsWith("http://", ignoreCase = true)) { "Seul HTTPS est accepté" }
-            return if (t.startsWith("https://", ignoreCase = true)) t else "https://$t"
+            // Le schéma est insensible à la casse : on le ramène en minuscules pour une adresse unique.
+            return if (t.startsWith("https://", ignoreCase = true)) "https://" + t.substring(8) else "https://$t"
         }
 
-        @Suppress("CustomX509TrustManager", "TrustAllX509TrustManager")
-        private fun buildHttp(insecure: Boolean): OkHttpClient {
+        private fun buildHttp(creds: Credentials): OkHttpClient {
             val builder = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
-            if (insecure) {
-                // Uniquement pour un NAS à certificat auto-signé, activé explicitement par l'utilisateur.
-                val trustAll = object : X509TrustManager {
-                    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
-                    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit
-                    override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+            if (creds.insecure) {
+                // NAS à certificat auto-signé : on n'accepte QUE le certificat dont l'empreinte a été confirmée.
+                // Sans empreinte (réglage hérité d'une ancienne version), la validation normale s'applique et échoue.
+                val pin = creds.pinnedSha256
+                if (pin != null) {
+                    val trust = PinnedTrustManager(pin)
+                    val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), SecureRandom()) }
+                    builder.sslSocketFactory(ctx.socketFactory, trust).hostnameVerifier { _, _ -> true }
                 }
-                val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustAll), SecureRandom()) }
-                builder.sslSocketFactory(ctx.socketFactory, trustAll).hostnameVerifier { _, _ -> true }
             }
             return builder.build()
         }

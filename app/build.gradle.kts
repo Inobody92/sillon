@@ -31,6 +31,10 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        // Les classes Android (Log, Uri…) renvoient des valeurs neutres dans les tests exécutés sur l'ordinateur.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -54,4 +58,11 @@ dependencies {
     implementation(libs.androidx.compose.reorderable)
     implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.tls)
+    // org.json réel : celui d'Android n'est qu'une coquille vide dans les tests sur ordinateur.
+    testImplementation(libs.json)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

@@ -25,6 +25,8 @@ class SecureStore(context: Context) {
             .putString(K_PASSWORD, encrypt(c.password))
             .putBoolean(K_INSECURE, c.insecure)
             .putString(K_DEVICE, c.deviceId)
+            .putString(K_PIN, c.pinnedSha256)
+            .putString(K_QC, c.quickConnectId)
             .apply()
     }
 
@@ -33,7 +35,9 @@ class SecureStore(context: Context) {
         val account = prefs.getString(K_ACCOUNT, null) ?: return null
         val enc = prefs.getString(K_PASSWORD, null) ?: return null
         val password = runCatching { decrypt(enc) }.getOrNull() ?: return null
-        return Credentials(url, account, password, prefs.getBoolean(K_INSECURE, false), prefs.getString(K_DEVICE, null))
+        return Credentials(url, account, password, prefs.getBoolean(K_INSECURE, false), prefs.getString(K_DEVICE, null),
+            prefs.getString(K_PIN, null), prefs.getString(K_QC, null),
+        )
     }
 
     /** Dernières valeurs saisies, pour préremplir l'écran de connexion (sans mot de passe). */
@@ -84,5 +88,7 @@ class SecureStore(context: Context) {
         const val K_PASSWORD = "password"
         const val K_INSECURE = "insecure"
         const val K_DEVICE = "device_id"
+        const val K_PIN = "pinned_sha256"
+        const val K_QC = "quickconnect_id"
     }
 }

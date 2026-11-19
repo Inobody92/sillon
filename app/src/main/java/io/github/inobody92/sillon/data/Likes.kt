@@ -51,12 +51,23 @@ object Likes {
         load()
     }
 
+    /** Réinitialise l'état dans [stateFile] (tests). */
+    @Synchronized
+    internal fun initForTest(stateFile: File) {
+        file = stateFile
+        _state.value = LikesState()
+        load()
+    }
+
     fun isLiked(songId: String) = songId in _state.value.ids
 
     /** Like ou retire le like. Instantané à l'écran ; le NAS suit, et on revient en arrière s'il refuse. */
     fun toggle(client: SynoClient, songId: String) {
-        scope.launch { mutex.withLock { doToggle(client, songId) } }
+        scope.launch { toggleNow(client, songId) }
     }
+
+    /** Même chose que [toggle], mais on attend la fin (utile aux tests). */
+    internal suspend fun toggleNow(client: SynoClient, songId: String) = mutex.withLock { doToggle(client, songId) }
 
     private suspend fun doToggle(client: SynoClient, songId: String) {
         val before = _state.value
