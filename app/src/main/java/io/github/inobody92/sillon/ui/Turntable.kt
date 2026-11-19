@@ -59,9 +59,9 @@ import kotlin.math.sin
  * curseur approximatif (comme un vrai bras, la distance parcourue sur le disque n'est pas strictement linéaire).
  */
 internal object Arm {
-    const val PX = 1.10f
-    const val PY = -0.60f
-    const val LEN = 1.15f
+    const val PX = 0.919f
+    const val PY = -0.919f
+    const val LEN = 1.20f
     const val R_OUT = 0.95f
     const val R_IN = 0.38f
 
@@ -255,7 +255,7 @@ fun Turntable(
             val dir = Offset(cos(a), sin(a))
             val pivot = Offset(g.cx + Arm.PX * g.r, g.cy + Arm.PY * g.r)
             val tip = pivot + dir * (Arm.LEN * g.r)
-            val tail = pivot - dir * (0.20f * g.r)
+            val tail = pivot - dir * (0.10f * g.r)
             val shadow = Offset(g.r * 0.03f, g.r * 0.05f)
 
             // Ombre portée du bras sur le disque.
@@ -274,8 +274,8 @@ fun Turntable(
 
 private class Geometry(val cx: Float, val cy: Float, val r: Float)
 
-/** Disposition du plateau dans un carré de côté [w] : le disque à gauche, de la place pour le pivot à droite. */
-private fun geometry(w: Float) = Geometry(cx = w * 0.44f, cy = w * 0.55f, r = w * 0.40f)
+/** Disposition du plateau dans un carré de côté [w] : le disque est centré et occupe presque toute la largeur ; le pivot du bras est collé dans le coin haut droit, il ne prend donc aucune place sur les côtés. */
+private fun geometry(w: Float) = Geometry(cx = w * 0.50f, cy = w * 0.50f, r = w * 0.43f)
 
 /**
  * Angle de la direction pivot -> doigt, ramené dans [0, 2π[. Sans cela, `atan2` renvoie un angle négatif dès que le

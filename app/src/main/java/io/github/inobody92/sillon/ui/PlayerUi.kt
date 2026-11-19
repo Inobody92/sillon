@@ -154,7 +154,7 @@ fun NowPlayingScreen(
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Réduire")
                 }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(0.5f))
             val useTurntable by AppSettings.turntable.collectAsStateWithLifecycle()
             if (useTurntable) {
                 Turntable(
@@ -196,7 +196,7 @@ fun NowPlayingScreen(
             if (client != null && ui.mediaId.isNotBlank()) {
                 RatingRow(client, ui.mediaId)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.weight(0.4f))
 
             val duration = ui.durationMs.coerceAtLeast(1L)
             Slider(
@@ -218,7 +218,7 @@ fun NowPlayingScreen(
                 Text(formatTime(ui.durationMs), style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.weight(0.6f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                 IconButton(onClick = player::previous, enabled = ui.hasPrevious, modifier = Modifier.size(64.dp)) {
                     Icon(Icons.Filled.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(36.dp))
@@ -236,7 +236,7 @@ fun NowPlayingScreen(
                     Icon(Icons.Filled.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(36.dp))
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.weight(0.5f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 IconButton(onClick = player::toggleShuffle) {
                     Icon(
@@ -272,7 +272,7 @@ fun NowPlayingScreen(
             if (sleep.active) {
                 SleepStatus(sleep)
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(0.4f))
         }
     }
 
