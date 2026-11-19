@@ -1,5 +1,8 @@
 package io.github.inobody92.sillon.ui
 
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -56,7 +59,9 @@ fun EqualizerScreen(onClose: () -> Unit) {
                     }
                 },
             )
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+            val header: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Activer l'égaliseur", style = MaterialTheme.typography.titleMedium)
@@ -68,68 +73,97 @@ fun EqualizerScreen(onClose: () -> Unit) {
                     }
                     Switch(checked = enabled, onCheckedChange = { AppSettings.setEqEnabled(it) })
                 }
-
-                // Les réglages restent modifiables égaliseur éteint, mais on indique qu'ils ne sont pas appliqués.
-                Column(Modifier.alpha(if (enabled) 1f else 0.5f)) {
-                    Text(
-                        "Préréglages",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        EqPresets.all.forEach { preset ->
-                            FilterChip(
-                                selected = presetId == preset.id,
-                                onClick = {
-                                    AppSettings.selectEqPreset(preset)
-                                    AppSettings.setEqEnabled(true)
-                                },
-                                label = { Text(preset.label) },
-                            )
-                        }
-                        // Toujours présent : s'il apparaissait au premier geste, il décalerait les curseurs sous le doigt.
+            }
+            val presets: @Composable () -> Unit = {
+                Text(
+                    "Préréglages",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EqPresets.all.forEach { preset ->
                         FilterChip(
-                            selected = presetId == EqPresets.CUSTOM_ID,
-                            onClick = { AppSettings.setEqEnabled(true) },
-                            label = { Text("Personnalisé") },
+                            selected = presetId == preset.id,
+                            onClick = {
+                                AppSettings.selectEqPreset(preset)
+                                AppSettings.setEqEnabled(true)
+                            },
+                            label = { Text(preset.label) },
                         )
                     }
-
-                    Text(
-                        "Réglage fin",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
+                    // Toujours présent : s'il apparaissait au premier geste, il décalerait les curseurs sous le doigt.
+                    FilterChip(
+                        selected = presetId == EqPresets.CUSTOM_ID,
+                        onClick = { AppSettings.setEqEnabled(true) },
+                        label = { Text("Personnalisé") },
                     )
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        EqPresets.REFERENCE_HZ.forEachIndexed { index, hz ->
-                            val db = gains[index]
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    gainLabel(db),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                VerticalSlider(
-                                    value = db,
-                                    onValueChange = {
-                                        // Pas d'un demi-décibel : plus précis n'a pas de sens à l'oreille.
-                                        AppSettings.setEqBand(index, (it * 2).roundToInt() / 2f)
-                                        AppSettings.setEqEnabled(true)
-                                    },
-                                    valueRange = -EqPresets.MAX_DB..EqPresets.MAX_DB,
-                                    modifier = Modifier.height(260.dp),
-                                )
-                                Text(frequencyLabel(hz), style = MaterialTheme.typography.labelLarge)
-                            }
+                }
+            }
+            val sliders: @Composable () -> Unit = {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    EqPresets.REFERENCE_HZ.forEachIndexed { index, hz ->
+                        val db = gains[index]
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                gainLabel(db),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            VerticalSlider(
+                                value = db,
+                                onValueChange = {
+                                    // Pas d'un demi-décibel : plus précis n'a pas de sens à l'oreille.
+                                    AppSettings.setEqBand(index, (it * 2).roundToInt() / 2f)
+                                    AppSettings.setEqEnabled(true)
+                                },
+                                valueRange = -EqPresets.MAX_DB..EqPresets.MAX_DB,
+                                modifier = Modifier.height(if (landscape) 170.dp else 260.dp),
+                            )
+                            Text(frequencyLabel(hz), style = MaterialTheme.typography.labelLarge)
                         }
                     }
-                    Text(
-                        "Évite de relever beaucoup de bandes à la fois : le son finirait par saturer. " +
-                            "Pour plus de volume, baisse plutôt les bandes inutiles.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
+                }
+            }
+            val hint: @Composable () -> Unit = {
+                Text(
+                    "Évite de relever beaucoup de bandes à la fois : le son finirait par saturer. " +
+                        "Pour plus de volume, baisse plutôt les bandes inutiles.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+
+            // Les réglages restent modifiables égaliseur éteint, mais on indique qu'ils ne sont pas appliqués.
+            if (landscape) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                ) {
+                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                        header()
+                        Column(Modifier.alpha(if (enabled) 1f else 0.5f)) {
+                            presets()
+                            hint()
+                        }
+                    }
+                    Column(Modifier.weight(1f).fillMaxHeight().alpha(if (enabled) 1f else 0.5f), verticalArrangement = Arrangement.Center) {
+                        sliders()
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    header()
+                    Column(Modifier.alpha(if (enabled) 1f else 0.5f)) {
+                        presets()
+                        Text(
+                            "Réglage fin",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
+                        )
+                        sliders()
+                        hint()
+                    }
                 }
             }
         }

@@ -7,6 +7,16 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -266,7 +276,31 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         showMessage(if (count == 1) "1 titre $where" else "$count titres $where")
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val destinations = listOf(
+            Triple("Accueil", Icons.Filled.Home, 0),
+            Triple("Albums", Icons.Filled.Album, 1),
+            Triple("Artistes", Icons.Filled.Person, 2),
+            Triple("Playlists", Icons.AutoMirrored.Filled.QueueMusic, 3),
+            Triple("Recherche", Icons.Filled.Search, 4),
+        )
+        Row(Modifier.fillMaxSize()) {
+          // Paysage : la hauteur est comptée, la navigation passe sur le côté au lieu de la barre du bas.
+          if (landscape) {
+            NavigationRail {
+                Spacer(Modifier.weight(1f))
+                destinations.forEach { (label, icon, index) ->
+                    NavigationRailItem(
+                        selected = tab == index,
+                        onClick = { tab = index; resetNavigation() },
+                        icon = { Icon(icon, contentDescription = null) },
+                        label = { Text(label) },
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+            }
+          }
+          Column(Modifier.weight(1f).fillMaxHeight().then(if (landscape) Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier)) {
             Box(Modifier.weight(1f)) {
                 val currentAlbum = album
                 val currentPlaylist = playlist
@@ -410,40 +444,19 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                     if (playerUi.hasItem) {
                         MiniPlayer(playerUi, player, imageLoader, onOpen = { nowPlaying = true })
                     }
-                    NavigationBar {
-                        NavigationBarItem(
-                            selected = tab == 0,
-                            onClick = { tab = 0; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                            label = { Text("Accueil") },
-                        )
-                        NavigationBarItem(
-                            selected = tab == 1,
-                            onClick = { tab = 1; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Album, contentDescription = null) },
-                            label = { Text("Albums") },
-                        )
-                        NavigationBarItem(
-                            selected = tab == 2,
-                            onClick = { tab = 2; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                            label = { Text("Artistes") },
-                        )
-                        NavigationBarItem(
-                            selected = tab == 3,
-                            onClick = { tab = 3; resetNavigation() },
-                            icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
-                            label = { Text("Playlists") },
-                        )
-                        NavigationBarItem(
-                            selected = tab == 4,
-                            onClick = { tab = 4; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                            label = { Text("Recherche") },
-                        )
+                    if (!landscape) NavigationBar {
+                        destinations.forEach { (label, icon, index) ->
+                            NavigationBarItem(
+                                selected = tab == index,
+                                onClick = { tab = index; resetNavigation() },
+                                icon = { Icon(icon, contentDescription = null) },
+                                label = { Text(label) },
+                            )
+                        }
                     }
                 }
             }
+          }
         }
         if (nowPlaying && playerUi.hasItem) {
             NowPlayingScreen(

@@ -1,5 +1,9 @@
 package io.github.inobody92.sillon.ui
 
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
@@ -150,154 +154,199 @@ fun NowPlayingScreen(
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
 
-    Surface(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val visual by AppSettings.playerVisual.collectAsStateWithLifecycle()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Réduire")
-                }
-                // Affiche l'icône du mode suivant : platine, égaliseur, pochette, puis retour à la platine.
-                val next = PlayerVisual.entries[(visual.ordinal + 1) % PlayerVisual.entries.size]
-                Row {
-                    IconButton(onClick = onOpenEqualizer) {
-                        Icon(Icons.Filled.Tune, contentDescription = "Égaliseur et préréglages")
-                    }
-                    IconButton(onClick = { AppSettings.setPlayerVisual(next) }) {
-                        Icon(
-                            when (next) {
-                                PlayerVisual.TURNTABLE -> Icons.Filled.Album
-                                PlayerVisual.EQUALIZER -> Icons.Filled.GraphicEq
-                                PlayerVisual.COVER -> Icons.Filled.Image
-                            },
-                            contentDescription = "Affichage : ${next.label}",
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.weight(0.5f))
-            if (visual == PlayerVisual.EQUALIZER) {
-                EqualizerView(playing = ui.isPlaying, onTogglePlay = player::togglePlay)
-            } else if (visual == PlayerVisual.TURNTABLE) {
-                Turntable(
-                    artwork = ui.artwork,
-                    imageLoader = imageLoader,
-                    playing = ui.isPlaying,
-                    positionMs = position,
-                    durationMs = ui.durationMs,
-                    onSeek = player::seekTo,
-                    onTogglePlay = player::togglePlay,
-                )
-            } else {
-                CoverImage(
-                    url = ui.artwork,
-                    imageLoader = imageLoader,
-                    contentDescription = ui.album,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
-                )
-            }
-            Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        ui.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        ui.artist,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
-            }
-            if (client != null && ui.mediaId.isNotBlank()) {
-                RatingRow(client, ui.mediaId)
-            }
-            Spacer(Modifier.weight(0.4f))
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val visual by AppSettings.playerVisual.collectAsStateWithLifecycle()
 
-            val duration = ui.durationMs.coerceAtLeast(1L)
-            Slider(
-                value = if (dragging) dragValue else position.coerceAtMost(duration).toFloat(),
-                onValueChange = {
-                    dragging = true
-                    dragValue = it
-                },
-                onValueChangeFinished = {
-                    player.seekTo(dragValue.toLong())
-                    dragging = false
-                },
-                valueRange = 0f..duration.toFloat(),
-                modifier = Modifier.fillMaxWidth(),
+    // Les morceaux de l'écran sont définis une fois et assemblés en portrait (une colonne) ou en paysage (deux colonnes).
+    val topBar: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Réduire")
+            }
+            // Affiche l'icône du mode suivant : platine, égaliseur, pochette, puis retour à la platine.
+            val next = PlayerVisual.entries[(visual.ordinal + 1) % PlayerVisual.entries.size]
+            Row {
+                IconButton(onClick = onOpenEqualizer) {
+                    Icon(Icons.Filled.Tune, contentDescription = "Égaliseur et préréglages")
+                }
+                IconButton(onClick = { AppSettings.setPlayerVisual(next) }) {
+                    Icon(
+                        when (next) {
+                            PlayerVisual.TURNTABLE -> Icons.Filled.Album
+                            PlayerVisual.EQUALIZER -> Icons.Filled.GraphicEq
+                            PlayerVisual.COVER -> Icons.Filled.Image
+                        },
+                        contentDescription = "Affichage : ${next.label}",
+                    )
+                }
+            }
+        }
+    }
+
+    val visualBlock: @Composable (Modifier) -> Unit = { modifier ->
+        if (visual == PlayerVisual.EQUALIZER) {
+            EqualizerView(playing = ui.isPlaying, onTogglePlay = player::togglePlay, modifier = modifier)
+        } else if (visual == PlayerVisual.TURNTABLE) {
+            Turntable(
+                artwork = ui.artwork,
+                imageLoader = imageLoader,
+                playing = ui.isPlaying,
+                positionMs = position,
+                durationMs = ui.durationMs,
+                onSeek = player::seekTo,
+                onTogglePlay = player::togglePlay,
+                modifier = modifier,
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val shown = if (dragging) dragValue.toLong() else position
-                Text(formatTime(shown), style = MaterialTheme.typography.bodySmall)
-                Text(formatTime(ui.durationMs), style = MaterialTheme.typography.bodySmall)
-            }
+        } else {
+            CoverImage(
+                url = ui.artwork,
+                imageLoader = imageLoader,
+                contentDescription = ui.album,
+                modifier = modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
+            )
+        }
+    }
 
-            Spacer(Modifier.weight(0.6f))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                IconButton(onClick = player::previous, enabled = ui.hasPrevious, modifier = Modifier.size(64.dp)) {
-                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(36.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                IconButton(onClick = player::togglePlay, modifier = Modifier.size(80.dp)) {
-                    Icon(
-                        if (ui.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (ui.isPlaying) "Pause" else "Lecture",
-                        modifier = Modifier.size(56.dp),
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                IconButton(onClick = player::next, enabled = ui.hasNext, modifier = Modifier.size(64.dp)) {
-                    Icon(Icons.Filled.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(36.dp))
+    val titleBlock: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    ui.title,
+                    style = if (landscape) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                    maxLines = if (landscape) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    ui.artist,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
+        }
+        if (client != null && ui.mediaId.isNotBlank()) {
+            RatingRow(client, ui.mediaId)
+        }
+    }
+
+    val seekBlock: @Composable () -> Unit = {
+        val duration = ui.durationMs.coerceAtLeast(1L)
+        Slider(
+            value = if (dragging) dragValue else position.coerceAtMost(duration).toFloat(),
+            onValueChange = {
+                dragging = true
+                dragValue = it
+            },
+            onValueChangeFinished = {
+                player.seekTo(dragValue.toLong())
+                dragging = false
+            },
+            valueRange = 0f..duration.toFloat(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            val shown = if (dragging) dragValue.toLong() else position
+            Text(formatTime(shown), style = MaterialTheme.typography.bodySmall)
+            Text(formatTime(ui.durationMs), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+
+    val transportBlock: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            IconButton(onClick = player::previous, enabled = ui.hasPrevious, modifier = Modifier.size(64.dp)) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "Précédent", modifier = Modifier.size(36.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            IconButton(onClick = player::togglePlay, modifier = Modifier.size(if (landscape) 68.dp else 80.dp)) {
+                Icon(
+                    if (ui.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (ui.isPlaying) "Pause" else "Lecture",
+                    modifier = Modifier.size(if (landscape) 48.dp else 56.dp),
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            IconButton(onClick = player::next, enabled = ui.hasNext, modifier = Modifier.size(64.dp)) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(36.dp))
+            }
+        }
+    }
+
+    val optionsBlock: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            IconButton(onClick = player::toggleShuffle) {
+                Icon(
+                    Icons.Filled.Shuffle,
+                    contentDescription = if (ui.shuffle) "Aléatoire activé" else "Aléatoire désactivé",
+                    tint = if (ui.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = player::cycleRepeat) {
+                val active = ui.repeatMode != Player.REPEAT_MODE_OFF
+                Icon(
+                    if (ui.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                    contentDescription = "Répéter",
+                    tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onOpenQueue) {
+                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "File d'attente")
+            }
+            IconButton(onClick = { showSleepDialog = true }) {
+                Icon(
+                    Icons.Filled.Bedtime,
+                    contentDescription = "Minuteur de sommeil",
+                    tint = if (sleep.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (onAddToPlaylist != null) {
+                IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
                 }
             }
-            Spacer(Modifier.weight(0.5f))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                IconButton(onClick = player::toggleShuffle) {
-                    Icon(
-                        Icons.Filled.Shuffle,
-                        contentDescription = if (ui.shuffle) "Aléatoire activé" else "Aléatoire désactivé",
-                        tint = if (ui.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        }
+        if (sleep.active) {
+            SleepStatus(sleep)
+        }
+    }
+
+    Surface(Modifier.fillMaxSize()) {
+        if (landscape) {
+            // Paysage : le visuel carré prend toute la hauteur à gauche, les commandes s'empilent à droite.
+            Row(
+                Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(28.dp),
+            ) {
+                Box(Modifier.fillMaxHeight().aspectRatio(1f), contentAlignment = Alignment.Center) {
+                    visualBlock(Modifier.fillMaxSize())
                 }
-                IconButton(onClick = player::cycleRepeat) {
-                    val active = ui.repeatMode != Player.REPEAT_MODE_OFF
-                    Icon(
-                        if (ui.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
-                        contentDescription = "Répéter",
-                        tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = onOpenQueue) {
-                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "File d'attente")
-                }
-                IconButton(onClick = { showSleepDialog = true }) {
-                    Icon(
-                        Icons.Filled.Bedtime,
-                        contentDescription = "Minuteur de sommeil",
-                        tint = if (sleep.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (onAddToPlaylist != null) {
-                    IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
-                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
-                    }
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                    topBar()
+                    Column { titleBlock() }
+                    Column { seekBlock() }
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { transportBlock() }
+                    Column { optionsBlock() }
                 }
             }
-            if (sleep.active) {
-                SleepStatus(sleep)
+        } else {
+            Column(
+                Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                topBar()
+                Spacer(Modifier.weight(0.5f))
+                visualBlock(Modifier)
+                Spacer(Modifier.height(24.dp))
+                titleBlock()
+                Spacer(Modifier.weight(0.4f))
+                seekBlock()
+                Spacer(Modifier.weight(0.6f))
+                transportBlock()
+                Spacer(Modifier.weight(0.5f))
+                optionsBlock()
+                Spacer(Modifier.weight(0.4f))
             }
-            Spacer(Modifier.weight(0.4f))
         }
     }
 
