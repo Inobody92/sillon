@@ -62,7 +62,7 @@ fun DownloadProgressScreen(vm: AddMusicViewModel, onClose: () -> Unit) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (state.queueError != null) {
                     item(key = "error") {
-                        Text("Serveur injoignable : ${state.queueError}. Nouvelle tentative en cours…", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                        Text("${state.queueError}. Nouvelle tentative en cours…", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 if (queue == null) {
@@ -115,7 +115,7 @@ private fun TaskCard(task: RemoteTask, onCancel: (RemoteTask) -> Unit) {
                     Text("En cours : $it", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 val details = listOfNotNull(
-                    task.speedBps?.let { "${formatBytes(it)}/s" },
+                    task.speedBps?.let { formatSpeed(it) },
                     task.etaSec?.let { "encore ${formatEta(it)}" },
                     if (task.errors > 0) plural(task.errors, "erreur") else null,
                 ).joinToString(" · ")
@@ -153,4 +153,11 @@ internal fun formatEta(seconds: Int): String = when {
     seconds < 60 -> "$seconds s"
     seconds < 3600 -> "${seconds / 60} min ${"%02d".format(seconds % 60)} s"
     else -> "${seconds / 3600} h ${"%02d".format(seconds % 3600 / 60)} min"
+}
+
+/** « 1,4 Mo/s » : une décimale, car le débit d'un téléchargement se lit en dizaines de Ko ou en Mo. */
+internal fun formatSpeed(bytesPerSecond: Long): String = when {
+    bytesPerSecond >= 1_000_000 -> "%.1f Mo/s".format(bytesPerSecond / 1_000_000.0).replace('.', ',')
+    bytesPerSecond >= 1_000 -> "${bytesPerSecond / 1_000} Ko/s"
+    else -> "$bytesPerSecond o/s"
 }

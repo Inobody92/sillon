@@ -15,9 +15,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.security.SecureRandom
+import java.security.cert.CertificateException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 /**
  * Serveur de téléchargement personnel (facultatif) : un petit service HTTPS, installé à côté du NAS, qui cherche de la
@@ -180,7 +182,12 @@ class DownloadServerClient(baseUrl: String, private val token: String, private v
             } catch (e: DownloadServerException) {
                 throw e
             } catch (e: SSLException) {
-                throw DownloadServerException("Certificat du serveur non reconnu", DownloadServerException.Kind.CERTIFICATE, e)
+                // Seul un vrai problème de certificat (inconnu, modifié, nom non conforme) mérite ce message ; une connexion
+                // coupée pendant la poignée de main (serveur ou proxy en panne) est une simple panne réseau.
+                if (e.isCertificateProblem()) {
+                    throw DownloadServerException("Certificat du serveur non reconnu ou modifié", DownloadServerException.Kind.CERTIFICATE, e)
+                }
+                throw DownloadServerException("Serveur injoignable", DownloadServerException.Kind.NETWORK, e)
             } catch (e: IOException) {
                 throw DownloadServerException("Serveur injoignable", DownloadServerException.Kind.NETWORK, e)
             }
@@ -204,6 +211,9 @@ class DownloadServerClient(baseUrl: String, private val token: String, private v
         }
     }
 }
+
+private fun Throwable.isCertificateProblem(): Boolean =
+    generateSequence(this) { it.cause }.any { it is CertificateException || it is SSLPeerUnverifiedException }
 
 private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> =
     List(length()) { transform(getJSONObject(it)) }
