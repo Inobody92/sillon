@@ -52,6 +52,7 @@ import io.github.inobody92.sillon.data.ThemeMode
 fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
     val dynamicColors by AppSettings.dynamicColors.collectAsStateWithLifecycle()
+    val turntable by AppSettings.turntable.collectAsStateWithLifecycle()
     val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
     val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
     val offline by OfflineStore.state.collectAsStateWithLifecycle()

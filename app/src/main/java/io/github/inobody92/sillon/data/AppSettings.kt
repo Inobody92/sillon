@@ -39,6 +39,9 @@ object AppSettings {
     private val _mobileQuality = MutableStateFlow(AudioQuality.ORIGINAL)
     val mobileQuality: StateFlow<AudioQuality> = _mobileQuality.asStateFlow()
 
+    private val _turntable = MutableStateFlow(true)
+    val turntable: StateFlow<Boolean> = _turntable.asStateFlow()
+
     private val _dynamicColors = MutableStateFlow(false)
     val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
 
@@ -63,6 +66,7 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
+        _turntable.value = prefs.getBoolean(K_TURNTABLE, true)
     }
 
     fun setTheme(mode: ThemeMode) {
@@ -73,6 +77,11 @@ object AppSettings {
     fun setWifiQuality(quality: AudioQuality) {
         _wifiQuality.value = quality
         prefs.edit().putString(K_WIFI, quality.name).apply()
+    }
+
+    fun setTurntable(value: Boolean) {
+        _turntable.value = value
+        prefs.edit().putBoolean(K_TURNTABLE, value).apply()
     }
 
     fun setDynamicColors(value: Boolean) {
@@ -123,4 +132,5 @@ object AppSettings {
     private const val K_CACHE_MB = "cache_max_mb"
     private const val K_AUTO_LIKES = "auto_download_likes"
     private const val K_DYNAMIC = "dynamic_colors"
+    private const val K_TURNTABLE = "turntable"
 }

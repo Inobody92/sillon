@@ -56,11 +56,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import io.github.inobody92.sillon.playback.MediaItems
 import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
 import io.github.inobody92.sillon.playback.SleepState
+import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -153,12 +155,25 @@ fun NowPlayingScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
-            CoverImage(
-                url = ui.artwork,
-                imageLoader = imageLoader,
-                contentDescription = ui.album,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
-            )
+            val useTurntable by AppSettings.turntable.collectAsStateWithLifecycle()
+            if (useTurntable) {
+                Turntable(
+                    artwork = ui.artwork,
+                    imageLoader = imageLoader,
+                    playing = ui.isPlaying,
+                    positionMs = position,
+                    durationMs = ui.durationMs,
+                    onSeek = player::seekTo,
+                    onTogglePlay = player::togglePlay,
+                )
+            } else {
+                CoverImage(
+                    url = ui.artwork,
+                    imageLoader = imageLoader,
+                    contentDescription = ui.album,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
+                )
+            }
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
