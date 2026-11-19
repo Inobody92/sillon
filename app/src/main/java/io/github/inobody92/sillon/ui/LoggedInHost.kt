@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.Downloads
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Playlist
 import kotlinx.coroutines.launch
@@ -138,6 +139,36 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist != null) { artist = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist == null && genre != null) {
         genre = null
+    }
+
+    fun openLiked() {
+        val id = Likes.state.value.playlistId
+        if (id == null || Likes.state.value.ids.isEmpty()) {
+            showMessage("Aucun titre liké : touche le cœur d'un titre")
+        } else {
+            album = null
+            playlist = Playlist(id, Likes.NAME)
+        }
+    }
+
+    // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
+    LaunchedEffect(client) { Likes.sync(client) }
+    LaunchedEffect(Unit) { Likes.errors.collect { showMessage(it) } }
+
+    // Playlists téléchargées : si elles ont changé sur le NAS depuis la dernière fois, on les remet à jour.
+    LaunchedEffect(client) {
+        for (c in OfflineStore.state.value.collections.filter { it.type == "playlist" }) {
+            try {
+                val id = c.id.removePrefix("playlist:")
+                val current = client.playlistSongs(id).map { it.id }
+                if (current != c.songIds) {
+                    Downloads.pinPlaylist(context, client, Playlist(id, c.name))
+                    showMessage("« ${c.name} » mise à jour hors-ligne")
+                }
+            } catch (_: Exception) {
+                // Playlist supprimée ou NAS indisponible : on garde la copie locale telle quelle.
+            }
+        }
     }
 
     fun downloadStartMessage() =
@@ -300,6 +331,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             onPlayMix = { songs -> player.play(client, songs, 0) },
                             onPlayRadio = { mood -> player.playRadio(mood) },
                             onOpenDownloads = { showDownloads = true },
+                            onOpenLiked = ::openLiked,
                             onSettings = { showSettings = true },
                         )
                     }
@@ -386,6 +418,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         if (nowPlaying && playerUi.hasItem) {
             NowPlayingScreen(
                 playerUi, player, imageLoader,
+                client = client,
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = { mediaId -> addTarget = listOf(mediaId) },
@@ -409,7 +442,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             )
         }
         if (showQueue && playerUi.hasItem) {
-            QueueScreen(playerUi, player, imageLoader, onClose = { showQueue = false })
+            QueueScreen(playerUi, player, imageLoader, client, onClose = { showQueue = false })
         }
         addTarget?.let { ids ->
             AddToPlaylistDialog(

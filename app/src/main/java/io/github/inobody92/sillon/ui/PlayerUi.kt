@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,7 +53,9 @@ import androidx.media3.common.Player
 import coil3.ImageLoader
 import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
+import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Position de lecture rafraîchie deux fois par seconde tant qu'on affiche le lecteur. */
 @Composable
@@ -116,6 +122,7 @@ fun NowPlayingScreen(
     ui: PlayerUi,
     player: PlayerController,
     imageLoader: ImageLoader,
+    client: SynoClient?,
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
     onAddToPlaylist: ((mediaId: String) -> Unit)?,
@@ -142,22 +149,28 @@ fun NowPlayingScreen(
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
             )
             Spacer(Modifier.height(24.dp))
-            Text(
-                ui.title,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                ui.artist,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        ui.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        ui.artist,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
+            }
+            if (client != null && ui.mediaId.isNotBlank()) {
+                RatingRow(client, ui.mediaId)
+            }
+            Spacer(Modifier.height(8.dp))
 
             val duration = ui.durationMs.coerceAtLeast(1L)
             Slider(
@@ -224,6 +237,39 @@ fun NowPlayingScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+/** Cinq étoiles pour noter le titre en cours ; toucher l'étoile déjà active retire la note. */
+@Composable
+private fun RatingRow(client: SynoClient, mediaId: String) {
+    var rating by remember(mediaId) { mutableIntStateOf(0) }
+    var known by remember(mediaId) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(mediaId) {
+        runCatching { client.rating(mediaId) }.onSuccess { rating = it; known = true }
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        for (star in 1..5) {
+            IconButton(
+                enabled = known,
+                onClick = {
+                    val previous = rating
+                    val next = if (previous == star) 0 else star
+                    rating = next
+                    scope.launch {
+                        // En cas d'échec, on remet l'ancienne valeur plutôt que d'afficher une note fausse.
+                        runCatching { client.setRating(mediaId, next) }.onFailure { rating = previous }
+                    }
+                },
+            ) {
+                Icon(
+                    if (star <= rating) Icons.Filled.Star else Icons.Filled.StarBorder,
+                    contentDescription = "$star étoile${if (star > 1) "s" else ""}",
+                    tint = if (star <= rating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

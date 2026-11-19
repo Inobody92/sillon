@@ -164,6 +164,7 @@ fun AlbumDetailScreen(
                         onPlayNext = { onPlayNext(listOf(song)) },
                         onAddToQueue = { onAddToQueue(listOf(song)) },
                         downloaded = song.id in offline.songs,
+                        client = client,
                     )
                 }
             }
@@ -265,6 +266,7 @@ private fun SongRow(
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     downloaded: Boolean,
+    client: SynoClient?,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -303,6 +305,7 @@ private fun SongRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        LikeButton(song.id, client)
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Options") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

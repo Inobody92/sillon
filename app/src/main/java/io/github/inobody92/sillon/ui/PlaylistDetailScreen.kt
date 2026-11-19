@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil3.ImageLoader
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Playlist
 import io.github.inobody92.sillon.data.Song
@@ -143,6 +145,7 @@ class PlaylistDetailViewModel(private val client: SynoClient, val playlist: Play
                     client.removeFromPlaylist(playlist.id, index)
                     syncedIds = syncedIds.filterIndexed { i, _ -> i != index }
                 }
+                Likes.onPlaylistChanged(client, playlist.id)
                 onResult("« ${removed.song.title} » retiré")
             } catch (e: Exception) {
                 onResult("Suppression impossible : ${e.message}")
@@ -173,6 +176,15 @@ fun PlaylistDetailScreen(
     )
     val state by vm.state.collectAsStateWithLifecycle()
     val songs = state.entries.map { it.song }
+
+    // Cette playlist est « Titres likés » : un cœur touché ailleurs doit la mettre à jour ici.
+    val likes by Likes.state.collectAsStateWithLifecycle()
+    if (playlist.id == likes.playlistId) {
+        // Clé = révision : on se relit une fois l'opération terminée sur le NAS, pas pendant.
+        LaunchedEffect(likes.revision) {
+            if (!state.loading && songs.map { it.id }.toSet() != likes.ids) vm.load()
+        }
+    }
 
     val listState = rememberLazyListState()
     // L'en-tête occupe l'index 0 de la liste : on décale pour retrouver la position dans la playlist.
@@ -290,6 +302,7 @@ fun PlaylistDetailScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                                LikeButton(entry.song.id, client)
                                 var menu by remember { mutableStateOf(false) }
                                 Box {
                                     IconButton(onClick = { menu = true }) {

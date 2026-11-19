@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -66,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import io.github.inobody92.sillon.data.DailyMix
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
 import io.github.inobody92.sillon.data.OfflineStore
@@ -116,9 +118,11 @@ fun HomeScreen(
     onPlayMix: (List<Song>) -> Unit,
     onPlayRadio: (Mood) -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenLiked: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
+    val likes by Likes.state.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<Mood?>(null) }
@@ -154,6 +158,27 @@ fun HomeScreen(
                                 } else {
                                     "${offline.songs.size} titres · ${formatBytes(offline.bytes)}" +
                                         if (offline.pendingCount > 0) " · ${offline.pendingCount} en attente" else ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = "favorites") {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clickable(onClick = onOpenLiked),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                            Text("Titres likés", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                when (likes.ids.size) {
+                                    0 -> "Touche le cœur d'un titre pour le retrouver ici"
+                                    1 -> "1 titre"
+                                    else -> "${likes.ids.size} titres"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

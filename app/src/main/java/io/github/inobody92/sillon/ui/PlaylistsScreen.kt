@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.Playlist
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +88,7 @@ class PlaylistsViewModel(private val client: SynoClient) : ViewModel() {
 
     fun addSongs(playlistId: String, songIds: List<String>, onResult: (String?) -> Unit) = run(onResult) {
         client.addToPlaylist(playlistId, songIds)
+        Likes.onPlaylistChanged(client, playlistId)
     }
 
     fun rename(playlistId: String, newName: String, onResult: (String?) -> Unit) = run(onResult) {
@@ -94,6 +97,7 @@ class PlaylistsViewModel(private val client: SynoClient) : ViewModel() {
 
     fun delete(playlistId: String, onResult: (String?) -> Unit) = run(onResult) {
         client.deletePlaylist(playlistId)
+        Likes.onPlaylistChanged(client, playlistId)
     }
 
     private fun run(onResult: (String?) -> Unit, block: suspend () -> Unit) {
@@ -118,6 +122,8 @@ fun PlaylistsScreen(
     onMessage: (String) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    // La liste est partagée avec le reste de l'app (« Titres likés » est créée ailleurs) : on la relit à chaque affichage.
+    LaunchedEffect(Unit) { vm.refresh() }
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Playlist?>(null) }
     var deleting by remember { mutableStateOf<Playlist?>(null) }

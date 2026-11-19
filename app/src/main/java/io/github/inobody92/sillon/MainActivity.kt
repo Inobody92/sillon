@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.ThemeMode
 import io.github.inobody92.sillon.ui.AuthState
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AppSettings.init(applicationContext)
         OfflineStore.init(applicationContext)
+        Likes.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             val themeMode by AppSettings.theme.collectAsStateWithLifecycle()

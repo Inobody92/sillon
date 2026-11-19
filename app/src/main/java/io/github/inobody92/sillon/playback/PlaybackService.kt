@@ -27,7 +27,11 @@ import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.SessionHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
@@ -53,6 +57,7 @@ class PlaybackService : MediaLibraryService() {
     /** Morceau pour lequel on a déjà tenté une reconnexion (évite les boucles). */
     private var retriedMediaId: String? = null
     private var refillingRadio = false
+    private var saveJob: Job? = null
 
     private fun activeClient() = SessionHolder.client ?: SessionHolder.restore(applicationContext)
 
@@ -102,11 +107,22 @@ class PlaybackService : MediaLibraryService() {
                 // Historique d'écoute (local) : alimente le mix du jour et la radio.
                 mediaItem?.mediaId?.takeIf { it.isNotBlank() }?.let { PlayHistory.record(applicationContext, it) }
                 maybeRefillRadio(player)
+                scheduleSave(player)
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 maybeRefillRadio(player)
+                scheduleSave(player)
             }
+
+            // Pause ou fin : c'est le bon moment pour mémoriser la position exacte.
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying) saveNow(player)
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = scheduleSave(player)
+
+            override fun onRepeatModeChanged(repeatMode: Int) = scheduleSave(player)
 
             // Session NAS expirée en cours de route : on se reconnecte une fois puis on reprend.
             override fun onPlayerError(error: PlaybackException) {
@@ -122,7 +138,47 @@ class PlaybackService : MediaLibraryService() {
         })
 
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+
+        restoreQueue(player)
+        // Pendant la lecture, on mémorise la position toutes les 20 s (un plantage ne fait pas perdre plus).
+        scope.launch {
+            while (true) {
+                delay(20_000)
+                if (player.isPlaying) saveNow(player)
+            }
+        }
     }
+
+    private fun scheduleSave(player: Player) {
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            delay(1_000) // regroupe les rafales d'événements (ajout de plusieurs titres, etc.)
+            saveNow(player)
+        }
+    }
+
+    private fun saveNow(player: Player) {
+        val json = QueueStore.snapshot(player) ?: return
+        scope.launch(Dispatchers.IO) { QueueStore.write(applicationContext, json) }
+    }
+
+    /** Remet la file d'attente de la dernière session, en pause, sans rien charger tant qu'on ne lance pas la lecture. */
+    private fun restoreQueue(player: Player) {
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) { QueueStore.load(applicationContext) } ?: return@launch
+            // Pochette : si la session NAS n'est pas déjà là, on n'attend pas plus de 4 s (réseau absent).
+            val client = withTimeoutOrNull(4_000) {
+                withContext(Dispatchers.IO) { SessionHolder.client ?: runCatching { SessionHolder.restore(applicationContext) }.getOrNull() }
+            }
+            if (player.mediaItemCount > 0) return@launch // l'utilisateur a déjà lancé autre chose entre-temps
+            player.setMediaItems(buildItems(saved, client), saved.index, saved.positionMs)
+            player.shuffleModeEnabled = saved.shuffle
+            player.repeatMode = saved.repeatMode
+        }
+    }
+
+    private fun buildItems(saved: SavedQueue, client: io.github.inobody92.sillon.data.SynoClient?): List<MediaItem> =
+        saved.items.map { MediaItems.song(it.song, null, MediaItems.artwork(client, it.song), it.parent, it.radio) }
 
     /** Radio sans fin : ajoute des titres quand il en reste moins de cinq après celui en cours. */
     private fun maybeRefillRadio(player: Player) {
@@ -148,11 +204,13 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        session?.player?.let { saveNow(it) }
         val player = session?.player
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) stopSelf()
     }
 
     override fun onDestroy() {
+        session?.player?.let { p -> QueueStore.snapshot(p)?.let { QueueStore.write(applicationContext, it) } }
         session?.run {
             player.release()
             release()
@@ -221,6 +279,16 @@ class PlaybackService : MediaLibraryService() {
             } catch (_: Exception) {
                 LibraryResult.ofError(LibraryResult.RESULT_ERROR_IO)
             }
+        }
+
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
+            val saved = withContext(Dispatchers.IO) { QueueStore.load(applicationContext) }
+                ?: throw UnsupportedOperationException("Rien à reprendre")
+            val client = withContext(Dispatchers.IO) { SessionHolder.client ?: runCatching { SessionHolder.restore(applicationContext) }.getOrNull() }
+            MediaSession.MediaItemsWithStartPosition(buildItems(saved, client), saved.index, saved.positionMs)
         }
 
         override fun onAddMediaItems(

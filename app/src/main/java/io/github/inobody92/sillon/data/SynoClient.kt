@@ -258,6 +258,25 @@ class SynoClient(val creds: Credentials) {
         }.mapNotNull { it.await() }
     }
 
+    // --- notation ---------------------------------------------------------------------
+
+    /** Note d'un titre (0 = non noté, 1 à 5 étoiles). */
+    suspend fun rating(songId: String): Int {
+        val data = call(
+            "SYNO.AudioStation.Song", "getinfo",
+            params = mapOf("id" to songId, "library" to "all", "additional" to "song_rating"),
+        ).getJSONObject("data")
+        return data.optJSONArray("songs")?.optJSONObject(0)
+            ?.optJSONObject("additional")?.optJSONObject("song_rating")?.optInt("rating", 0) ?: 0
+    }
+
+    suspend fun setRating(songId: String, rating: Int) {
+        call(
+            "SYNO.AudioStation.Song", "setrating", version = 2,
+            params = mapOf("id" to songId, "rating" to "${rating.coerceIn(0, 5)}"),
+        )
+    }
+
     /** Titres dont le titre contient [query]. */
     suspend fun searchSongs(query: String, limit: Int = 50): List<Song> {
         val data = call(

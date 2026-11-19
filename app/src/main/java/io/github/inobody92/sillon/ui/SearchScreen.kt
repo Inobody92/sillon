@@ -270,6 +270,7 @@ private fun SongSearchRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        LikeButton(song.id, client)
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Options") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

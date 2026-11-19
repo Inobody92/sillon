@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
+import io.github.inobody92.sillon.data.SynoClient
 import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
 import sh.calvin.reorderable.ReorderableItem
@@ -48,6 +49,7 @@ fun QueueScreen(
     ui: PlayerUi,
     player: PlayerController,
     imageLoader: ImageLoader,
+    client: SynoClient?,
     onClose: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -115,6 +117,7 @@ fun QueueScreen(
                                         tint = MaterialTheme.colorScheme.primary,
                                     )
                                 }
+                                LikeButton(item.mediaId, client)
                                 IconButton(onClick = { player.removeFromQueue(index) }) {
                                     Icon(Icons.Filled.Close, contentDescription = "Retirer de la file")
                                 }

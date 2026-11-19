@@ -61,13 +61,14 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
         if (nowPlaying && playerUi.hasItem) {
             NowPlayingScreen(
                 playerUi, player, imageLoader,
+                client = null, // notation et ajout à une playlist demandent le NAS
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
-                onAddToPlaylist = null, // demande le NAS : indisponible hors connexion
+                onAddToPlaylist = null,
             )
         }
         if (showQueue && playerUi.hasItem) {
-            QueueScreen(playerUi, player, imageLoader, onClose = { showQueue = false })
+            QueueScreen(playerUi, player, imageLoader, client = null, onClose = { showQueue = false })
         }
     }
 }

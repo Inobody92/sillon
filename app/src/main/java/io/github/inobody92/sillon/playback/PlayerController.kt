@@ -70,7 +70,7 @@ class PlayerController(context: Context) {
         val albumArtwork = album?.let { client?.coverUrl(it, withSid = true) }?.let(Uri::parse)
         return songs.map { song ->
             // La pochette téléchargée passe en premier : elle s'affiche aussi sans réseau.
-            val artwork = OfflineStore.coverUri(song) ?: albumArtwork ?: client?.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
+            val artwork = OfflineStore.coverUri(song) ?: albumArtwork ?: MediaItems.artwork(client, song)
             MediaItems.song(song, album, artwork)
         }
     }
@@ -195,7 +195,7 @@ class PlayerController(context: Context) {
             album = md.albumTitle?.toString().orEmpty(),
             artwork = md.artworkUri?.toString(),
             isPlaying = p.isPlaying,
-            durationMs = p.duration.coerceAtLeast(0L),
+            durationMs = p.duration.takeIf { it > 0 } ?: md.durationMs ?: 0L,
             hasNext = p.hasNextMediaItem(),
             hasPrevious = p.hasPreviousMediaItem(),
         )
