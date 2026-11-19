@@ -45,6 +45,8 @@ data class Song(
     val disc: Int,
     val durationSec: Int,
     val ext: String,
+    val genre: String = "",
+    val year: Int = 0,
 )
 
 data class Artist(val name: String)
@@ -197,6 +199,15 @@ class SynoClient(val creds: Credentials) {
         val total = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data").optInt("total", 0)
         totals[key] = total
         return total
+    }
+
+    /** Une page de toute la bibliothèque (sert à construire l'index de recherche). */
+    suspend fun libraryPage(offset: Int, limit: Int): List<Song> = songsPage(null, offset, limit)
+
+    /** Nombre de titres, relu auprès du NAS (le cache de [songTotal] ne sert qu'au tirage aléatoire). */
+    suspend fun freshSongTotal(): Int {
+        totals.remove("")
+        return songTotal(null)
     }
 
     private suspend fun songsPage(genre: String?, offset: Int, limit: Int): List<Song> {
@@ -434,6 +445,8 @@ class SynoClient(val creds: Credentials) {
             disc = tag?.optInt("disc", 1) ?: 1,
             durationSec = audio?.optInt("duration") ?: 0,
             ext = o.optString("path").substringAfterLast('.', "").lowercase(),
+            genre = tag?.optString("genre").orEmpty(),
+            year = tag?.optInt("year") ?: 0,
         )
     }
 

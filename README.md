@@ -12,7 +12,8 @@ fichiers) avec une application neuve : Kotlin, Jetpack Compose, Media3.
 ## Fonctions
 
 - Connexion au NAS (adresse, compte, double authentification, appareil de confiance), identifiants chiffrés
-- Albums, artistes, genres, recherche, pochettes
+- Albums, artistes, genres, pochettes
+- Recherche souple et instantanée (index local) : sans accents ni casse, tolérante aux fautes de frappe, mots dans n'importe quel ordre, répartis entre titre, artiste, album et genre
 - Lecture en arrière-plan (notification, écran de verrouillage), file d'attente éditable, aléatoire, répétition,
   file conservée après redémarrage
 - Playlists : création, ajout, retrait, réordonnancement par glisser-déposer, renommage, suppression

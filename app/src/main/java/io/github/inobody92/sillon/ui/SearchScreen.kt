@@ -47,9 +47,14 @@ import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.Artist
+import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -76,20 +81,41 @@ class SearchViewModel(private val client: SynoClient) : ViewModel() {
 
     private var job: Job? = null
 
-    /** Lance la recherche après une courte pause de frappe, pour ne pas interroger le NAS à chaque lettre. */
+    init {
+        // Dès que l'index devient prêt, on relance la recherche en cours avec la version souple.
+        viewModelScope.launch {
+            LibraryIndex.state.map { it.ready }.distinctUntilChanged().collect { ready ->
+                if (ready && _state.value.query.isNotBlank()) onQueryChange(_state.value.query)
+            }
+        }
+    }
+
+    /**
+     * Recherche locale instantanée si l'index est prêt (souple : accents, fautes de frappe, plusieurs champs).
+     * Sinon, repli sur la recherche du NAS, après une courte pause de frappe pour ne pas l'interroger à chaque lettre.
+     */
     fun onQueryChange(query: String) {
         _state.value = _state.value.copy(query = query)
         job?.cancel()
-        if (query.trim().length < MIN_CHARS) {
+        if (query.isBlank()) {
             _state.value = SearchState(query = query)
             return
         }
         job = viewModelScope.launch {
+            if (LibraryIndex.isReady) {
+                val r = withContext(Dispatchers.Default) { LibraryIndex.search(query) }
+                _state.value = _state.value.copy(artists = r.artists, albums = r.albums, songs = r.songs, loading = false, error = null)
+                return@launch
+            }
+            if (query.trim().length < MIN_CHARS) {
+                _state.value = SearchState(query = query)
+                return@launch
+            }
             delay(DEBOUNCE_MS)
             _state.value = _state.value.copy(loading = true, error = null)
             val q = query.trim()
             try {
-                // Les deux requêtes sont lancées en parallèle.
+                // Les trois requêtes sont lancées en parallèle.
                 val results = coroutineScope {
                     val ar = async { client.artists(0, MAX_ARTISTS, filter = q) }
                     val a = async { client.albums(0, MAX_ALBUMS, filter = q) }
@@ -132,6 +158,7 @@ fun SearchScreen(
     onAddToPlaylist: (Song) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val index by LibraryIndex.state.collectAsStateWithLifecycle()
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
@@ -152,6 +179,14 @@ fun SearchScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             )
+            if (index.building && !index.ready) {
+                Text(
+                    "Indexation de ta bibliothèque… la recherche sera ensuite instantanée et plus souple.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                )
+            }
             Box(Modifier.fillMaxSize()) {
                 when {
                     state.error != null -> Text(
@@ -160,7 +195,7 @@ fun SearchScreen(
                         modifier = Modifier.align(Alignment.TopCenter).padding(24.dp),
                     )
                     state.loading && !state.hasResults -> CircularProgressIndicator(Modifier.align(Alignment.TopCenter))
-                    state.query.trim().length >= 2 && !state.loading && !state.hasResults -> Text(
+                    state.query.isNotBlank() && !state.loading && !state.hasResults -> Text(
                         "Aucun résultat pour « ${state.query.trim()} »",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.TopCenter).padding(24.dp),

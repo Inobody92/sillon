@@ -7,7 +7,7 @@ import org.json.JSONObject
 fun Song.toJson(): JSONObject = JSONObject()
     .put("id", id).put("title", title).put("artist", artist).put("album", album)
     .put("albumArtist", albumArtist).put("track", track).put("disc", disc)
-    .put("duration", durationSec).put("ext", ext)
+    .put("duration", durationSec).put("ext", ext).put("genre", genre).put("year", year)
 
 fun songFromJson(o: JSONObject): Song = Song(
     id = o.getString("id"),
@@ -19,6 +19,8 @@ fun songFromJson(o: JSONObject): Song = Song(
     disc = o.optInt("disc", 1),
     durationSec = o.optInt("duration"),
     ext = o.optString("ext"),
+    genre = o.optString("genre"),
+    year = o.optInt("year"),
 )
 
 fun List<Song>.toJsonArray(): JSONArray = JSONArray().also { arr -> forEach { arr.put(it.toJson()) } }

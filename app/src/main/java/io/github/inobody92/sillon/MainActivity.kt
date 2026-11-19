@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.ThemeMode
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
         AppSettings.init(applicationContext)
         OfflineStore.init(applicationContext)
         Likes.init(applicationContext)
+        LibraryIndex.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             val themeMode by AppSettings.theme.collectAsStateWithLifecycle()

@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.Downloads
+import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Playlist
@@ -153,6 +154,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
 
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
     LaunchedEffect(client) { Likes.sync(client) }
+    // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
+    LaunchedEffect(client) { LibraryIndex.ensure(client) }
     LaunchedEffect(Unit) { Likes.errors.collect { showMessage(it) } }
 
     // Playlists téléchargées : si elles ont changé sur le NAS depuis la dernière fois, on les remet à jour.

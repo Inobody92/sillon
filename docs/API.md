@@ -129,3 +129,10 @@ Paramètre `library` : `personal` ou `shared`.
   Les octets reçus correspondent exactement à `filesize` annoncé par `song_audio`.
 - Session expirée : le NAS répond **HTTP 200 avec du JSON** (et non une erreur HTTP) à la place de l'audio. Vérifier le
   `Content-Type` avant d'écrire le fichier, se reconnecter puis réessayer.
+
+## Index de recherche local (lot 9)
+- Le NAS ne cherche qu'un texte exact dans un seul champ. Sillon lit toute la bibliothèque par pages
+  (`Song.list`, `limit=500`, `additional=song_tag,song_audio`) et la garde dans `library_index.json` (environ 540 Ko pour
+  quelques milliers de titres).
+- Mise à jour : l'index est relu quand le nombre de titres (`data.total`) change ou s'il a plus de 14 jours.
+- `song_tag` fournit aussi `genre` et `year`, utilisés par la recherche.
