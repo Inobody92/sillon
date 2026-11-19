@@ -46,6 +46,7 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontWeight
+import androidx.glance.unit.ColorProvider
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.media3.session.MediaController
@@ -61,7 +62,7 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.withContext
 
 /** Mêmes couleurs que l'application, clair et sombre (le widget suit le thème du système). */
-private val SillonGlanceColors = ColorProviders(light = SillonLight, dark = SillonDark)
+internal val SillonGlanceColors = ColorProviders(light = SillonLight, dark = SillonDark)
 
 private val COMPACT = DpSize(110.dp, 110.dp)
 private val WIDE = DpSize(250.dp, 110.dp)
@@ -123,16 +124,16 @@ private fun WidgetContent(s: WidgetSnapshot, cover: Bitmap?) {
 }
 
 @androidx.compose.runtime.Composable
-private fun Cover(bitmap: Bitmap?, modifier: GlanceModifier) {
+internal fun Cover(bitmap: Bitmap?, modifier: GlanceModifier, radius: Dp = 14.dp) {
     if (bitmap != null) {
         Image(
             provider = ImageProvider(bitmap),
             contentDescription = "Pochette",
             contentScale = ContentScale.Crop,
-            modifier = modifier.cornerRadius(14.dp),
+            modifier = modifier.cornerRadius(radius),
         )
     } else {
-        Box(modifier.background(GlanceTheme.colors.surfaceVariant).cornerRadius(14.dp), contentAlignment = Alignment.Center) {
+        Box(modifier.background(GlanceTheme.colors.surfaceVariant).cornerRadius(radius), contentAlignment = Alignment.Center) {
             Image(provider = ImageProvider(R.drawable.ic_widget_disc), contentDescription = null, modifier = GlanceModifier.fillMaxSize().padding(10.dp))
         }
     }
@@ -171,7 +172,7 @@ private fun Controls(s: WidgetSnapshot, showSkip: Boolean) {
 }
 
 @androidx.compose.runtime.Composable
-private fun PlayButton(s: WidgetSnapshot, size: Dp) {
+internal fun PlayButton(s: WidgetSnapshot, size: Dp) {
     Box(
         GlanceModifier.size(size).background(GlanceTheme.colors.primary).cornerRadius(size / 2)
             .clickable(actionRunCallback<TogglePlayAction>()),
@@ -187,13 +188,13 @@ private fun PlayButton(s: WidgetSnapshot, size: Dp) {
 }
 
 @androidx.compose.runtime.Composable
-private fun IconAction(icon: Int, description: String, action: Action) {
-    Box(GlanceModifier.size(38.dp).clickable(action), contentAlignment = Alignment.Center) {
+internal fun IconAction(icon: Int, description: String, action: Action, tint: ColorProvider? = null, box: Dp = 38.dp, glyph: Dp = 26.dp) {
+    Box(GlanceModifier.size(box).clickable(action), contentAlignment = Alignment.Center) {
         Image(
             provider = ImageProvider(icon),
             contentDescription = description,
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
-            modifier = GlanceModifier.size(26.dp),
+            colorFilter = ColorFilter.tint(tint ?: GlanceTheme.colors.onSurface),
+            modifier = GlanceModifier.size(glyph),
         )
     }
 }

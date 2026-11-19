@@ -2,6 +2,7 @@ package io.github.inobody92.sillon.ui
 
 import android.os.Build
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -303,27 +304,29 @@ private fun UpdateSection() {
 private fun WidgetSection() {
     val context = LocalContext.current
     var message by remember { mutableStateOf<String?>(null) }
+
+    // Android demande lui-même la confirmation et la place sur l'écran d'accueil.
+    fun pin(receiver: Class<*>) {
+        val manager = android.appwidget.AppWidgetManager.getInstance(context)
+        message = if (manager.isRequestPinAppWidgetSupported) {
+            manager.requestPinAppWidget(android.content.ComponentName(context, receiver), null, null)
+            null
+        } else {
+            "Ton écran d'accueil ne permet pas d'ajouter un widget d'ici : appuie longuement sur l'écran d'accueil, puis Widgets, puis Sillon."
+        }
+    }
+
     Section("Widget")
     Text(
-        "Pochette, titre et boutons de lecture directement sur l'écran d'accueil.",
+        "La pochette et les boutons de lecture directement sur l'écran d'accueil, en grand (avec le titre) ou en petit carré.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp),
     )
-    OutlinedButton(
-        onClick = {
-            val manager = android.appwidget.AppWidgetManager.getInstance(context)
-            message = if (manager.isRequestPinAppWidgetSupported) {
-                manager.requestPinAppWidget(
-                    android.content.ComponentName(context, io.github.inobody92.sillon.widget.SillonWidgetReceiver::class.java), null, null,
-                )
-                null
-            } else {
-                "Ton écran d'accueil ne permet pas d'ajouter un widget d'ici : appuie longuement sur l'écran d'accueil, puis Widgets, puis Sillon."
-            }
-        },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    ) { Text("Ajouter à l'écran d'accueil") }
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { pin(io.github.inobody92.sillon.widget.SillonWidgetReceiver::class.java) }) { Text("Ajouter 4×2") }
+        OutlinedButton(onClick = { pin(io.github.inobody92.sillon.widget.SillonCompactWidgetReceiver::class.java) }) { Text("Ajouter 2×2") }
+    }
     message?.let {
         Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
     }

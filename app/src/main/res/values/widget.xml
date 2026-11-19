@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_description">Pochette, titre et commandes de lecture de Sillon</string>
+    <string name="widget_compact_description">Pochette et commandes de lecture de Sillon, en petit carré</string>
 </resources>

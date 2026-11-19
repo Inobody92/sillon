@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
         LibraryIndex.init(applicationContext)
         DownloadServerStore.init(applicationContext)
         // Le widget se redessine à chaque ouverture : il reflète toujours le dernier état connu.
-        lifecycleScope.launch { SillonWidget().updateAll(applicationContext) }
+        lifecycleScope.launch { io.github.inobody92.sillon.widget.Widgets.updateAll(applicationContext) }
         enableEdgeToEdge()
         setContent {
             val themeMode by AppSettings.theme.collectAsStateWithLifecycle()

@@ -70,7 +70,7 @@ class WidgetUpdater(
                 coverKey = coverKey,
             ),
         )
-        SillonWidget().updateAll(context)
+        Widgets.updateAll(context)
     }
 
     private suspend fun loadCover(): Bitmap? = try {

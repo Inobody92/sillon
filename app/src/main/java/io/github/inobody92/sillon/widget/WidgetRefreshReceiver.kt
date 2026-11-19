@@ -19,7 +19,7 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 WidgetStore.ensureLoaded(context)
-                SillonWidget().updateAll(context.applicationContext)
+                Widgets.updateAll(context)
             } finally {
                 pending.finish()
             }
