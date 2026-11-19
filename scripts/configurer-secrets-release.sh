@@ -4,6 +4,9 @@
 # Prérequis : `gh auth login` fait, et ~/.sillon-signing/keystore.properties (voir README).
 set -eu
 
+# Option -y : n'attend pas la confirmation (utile hors d'un terminal interactif). L'envoi reste ta décision.
+CONFIRME=0
+if [ "${1:-}" = "-y" ]; then CONFIRME=1; shift; fi
 PROPS="${1:-$HOME/.sillon-signing/keystore.properties}"
 [ -f "$PROPS" ] || { echo "Fichier introuvable : $PROPS"; exit 1; }
 
@@ -14,9 +17,11 @@ DEPOT="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 
 echo "Ceci va envoyer ta clé de signature et ses mots de passe dans les secrets chiffrés de :"
 echo "  $DEPOT"
-printf "Continuer ? [o/N] "
-read -r reponse
-[ "$reponse" = "o" ] || { echo "Annulé."; exit 1; }
+if [ "$CONFIRME" != "1" ]; then
+  printf "Continuer ? [o/N] "
+  read -r reponse
+  [ "$reponse" = "o" ] || { echo "Annulé."; exit 1; }
+fi
 
 base64 < "$STORE_FILE" | tr -d '\n' | gh secret set SIGNING_KEYSTORE_BASE64
 lire storePassword | tr -d '\n' | gh secret set SIGNING_STORE_PASSWORD
