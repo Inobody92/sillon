@@ -14,6 +14,15 @@ object MediaItems {
     const val EXTRA_PARENT = "sillon.parent"
     const val EXTRA_RADIO = "sillon.radio"
 
+    // Minuteur de sommeil (commande de session et état publié dans les extras de la session)
+    const val EXTRA_SLEEP_MODE = "sillon.sleep.mode"
+    const val EXTRA_SLEEP_END = "sillon.sleep.end"
+    const val EXTRA_SLEEP_MINUTES = "sillon.sleep.minutes"
+    const val SLEEP_TIME = "time"
+    const val SLEEP_TRACK = "track"
+    const val SLEEP_QUEUE = "queue"
+    const val SLEEP_OFF = "off"
+
     fun song(
         song: Song,
         album: Album?,

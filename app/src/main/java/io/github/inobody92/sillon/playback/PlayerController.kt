@@ -3,11 +3,13 @@ package io.github.inobody92.sillon.playback
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.OfflineStore
@@ -18,6 +20,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class QueueItem(val mediaId: String, val title: String, val artist: String, val artwork: String?)
+
+/** Minuteur de sommeil en cours (état tenu par le service). [mode] vide = aucun minuteur. */
+data class SleepState(val mode: String = "", val endAtMs: Long = 0) {
+    val active get() = mode.isNotEmpty()
+}
 
 data class PlayerUi(
     val hasItem: Boolean = false,
@@ -46,19 +53,27 @@ class PlayerController(context: Context) {
     private val _ui = MutableStateFlow(PlayerUi())
     val ui: StateFlow<PlayerUi> = _ui.asStateFlow()
 
+    private val _sleep = MutableStateFlow(SleepState())
+    val sleep: StateFlow<SleepState> = _sleep.asStateFlow()
+
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = publish(player)
     }
 
     init {
         val token = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
-        val future = MediaController.Builder(appContext, token).buildAsync()
+        val future = MediaController.Builder(appContext, token)
+            .setListener(object : MediaController.Listener {
+                override fun onExtrasChanged(controller: MediaController, extras: Bundle) = publishSleep(extras)
+            })
+            .buildAsync()
         future.addListener(
             {
                 val c = runCatching { future.get() }.getOrNull() ?: return@addListener
                 controller = c
                 c.addListener(listener)
                 publish(c)
+                publishSleep(c.sessionExtras)
                 pending.forEach { it(c) }
                 pending.clear()
             },
@@ -153,6 +168,24 @@ class PlayerController(context: Context) {
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
+    }
+
+    /** [mode] : [MediaItems.SLEEP_TIME] (avec [minutes]), [MediaItems.SLEEP_TRACK], [MediaItems.SLEEP_QUEUE] ou [MediaItems.SLEEP_OFF]. */
+    fun setSleepTimer(mode: String, minutes: Int = 0) = withController {
+        it.sendCustomCommand(
+            SessionCommand("sillon.SLEEP", Bundle.EMPTY),
+            Bundle().apply {
+                putString(MediaItems.EXTRA_SLEEP_MODE, mode)
+                putInt(MediaItems.EXTRA_SLEEP_MINUTES, minutes)
+            },
+        )
+    }
+
+    private fun publishSleep(extras: Bundle) {
+        _sleep.value = SleepState(
+            mode = extras.getString(MediaItems.EXTRA_SLEEP_MODE).orEmpty(),
+            endAtMs = extras.getLong(MediaItems.EXTRA_SLEEP_END, 0L),
+        )
     }
 
     fun togglePlay() = withController { if (it.isPlaying) it.pause() else it.play() }

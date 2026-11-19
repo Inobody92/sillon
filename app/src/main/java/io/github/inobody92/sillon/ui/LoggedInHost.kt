@@ -89,6 +89,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     val imageLoader = rememberImageLoader(client)
     val player = playerViewModel.controller
     val playerUi by player.ui.collectAsStateWithLifecycle()
+    val sleep by player.sleep.collectAsStateWithLifecycle()
 
     var album by rememberSaveable(stateSaver = AlbumSaver) { mutableStateOf(null) }
     var playlist by rememberSaveable(stateSaver = PlaylistSaver) { mutableStateOf(null) }
@@ -422,6 +423,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             NowPlayingScreen(
                 playerUi, player, imageLoader,
                 client = client,
+                sleep = sleep,
+                onSetSleep = player::setSleepTimer,
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = { mediaId -> addTarget = listOf(mediaId) },

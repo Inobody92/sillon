@@ -12,6 +12,8 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -34,6 +36,7 @@ import io.github.inobody92.sillon.data.SessionHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -65,6 +68,13 @@ class PlaybackService : MediaLibraryService() {
     private var retriedMediaId: String? = null
     private var refillingRadio = false
     private var saveJob: Job? = null
+    private lateinit var prefetchSources: CacheDataSource.Factory
+    private val prefetchJobs = mutableMapOf<String, Job>()
+
+    // Minuteur de sommeil : état gardé dans le service pour survivre à la fermeture de l'écran.
+    private var sleepJob: Job? = null
+    private var sleepMode = ""
+    private var sleepEndAt = 0L
 
     private fun activeClient() = SessionHolder.client ?: SessionHolder.restore(applicationContext)
 
@@ -80,14 +90,12 @@ class PlaybackService : MediaLibraryService() {
             val client = activeClient() ?: throw IOException("Pas de session Sillon active")
             client.http.newCall(request)
         }
-        val resolver = ResolvingDataSource.Resolver { spec: DataSpec ->
+        // Réseau : l'adresse interne sillon:// devient la vraie URL de streaming, avec le sid courant.
+        val networkResolver = ResolvingDataSource.Resolver { spec: DataSpec ->
             if (spec.uri.scheme != MediaItems.SCHEME) {
                 spec
             } else {
                 val id = spec.uri.getQueryParameter("id") ?: throw IOException("Identifiant de morceau manquant")
-                // Titre téléchargé : on lit le fichier local, sans toucher au NAS (marche hors connexion).
-                val local = OfflineStore.file(id)
-                if (local != null) return@Resolver spec.withUri(Uri.fromFile(local))
                 val client = activeClient() ?: throw IOException("Pas de session Sillon active")
                 val ext = spec.uri.lastPathSegment.orEmpty().substringAfterLast('.', "")
                 val url = client.streamUrl(id, ext, AppSettings.currentQuality(applicationContext))
@@ -95,7 +103,26 @@ class PlaybackService : MediaLibraryService() {
                 spec.withUri(Uri.parse(url))
             }
         }
-        val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, OkHttpDataSource.Factory(callFactory)), resolver)
+        // Cache disque : la clé est l'adresse interne (stable, sans sid) et la qualité demandée.
+        val cacheFactory = CacheDataSource.Factory()
+            .setCache(AudioCache.get(applicationContext))
+            .setUpstreamDataSourceFactory(
+                ResolvingDataSource.Factory(OkHttpDataSource.Factory(callFactory), networkResolver),
+            )
+            .setCacheKeyFactory { spec -> "${spec.uri}#${AppSettings.currentQuality(applicationContext).name}" }
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        prefetchSources = cacheFactory
+        // Titre téléchargé : on lit le fichier local, sans cache ni NAS (marche hors connexion).
+        val offlineResolver = ResolvingDataSource.Resolver { spec: DataSpec ->
+            if (spec.uri.scheme != MediaItems.SCHEME) {
+                spec
+            } else {
+                val id = spec.uri.getQueryParameter("id")
+                val local = id?.let { OfflineStore.file(it) }
+                if (local != null) spec.withUri(Uri.fromFile(local)) else spec
+            }
+        }
+        val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, cacheFactory), offlineResolver)
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
@@ -113,6 +140,8 @@ class PlaybackService : MediaLibraryService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 retriedMediaId = null
                 refreshLikeButton()
+                updateSleepForTransition(player)
+                prefetchNext(player)
                 // Historique d'écoute (local) : alimente le mix du jour et la radio.
                 mediaItem?.mediaId?.takeIf { it.isNotBlank() }?.let { PlayHistory.record(applicationContext, it) }
                 maybeRefillRadio(player)
@@ -122,6 +151,21 @@ class PlaybackService : MediaLibraryService() {
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 maybeRefillRadio(player)
                 scheduleSave(player)
+                prefetchNext(player)
+            }
+
+            // Un titre est prêt : c'est le moment de préparer les suivants.
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) prefetchNext(player)
+            }
+
+            // « Fin du titre » / « fin de la file » : le lecteur s'est mis en pause tout seul, le minuteur a fait son travail.
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
+                    (sleepMode == SLEEP_TRACK || sleepMode == SLEEP_QUEUE)
+                ) {
+                    cancelSleep(player)
+                }
             }
 
             // Pause ou fin : c'est le bon moment pour mémoriser la position exacte.
@@ -159,6 +203,105 @@ class PlaybackService : MediaLibraryService() {
                 if (player.isPlaying) saveNow(player)
             }
         }
+    }
+
+    /**
+     * Précharge dans le cache les prochains titres de la file (en tenant compte de l'aléatoire et de la répétition),
+     * pour que l'enchaînement ne dépende plus du réseau et que le NAS ne soit sollicité qu'une fois.
+     */
+    private fun prefetchNext(player: Player) {
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val targets = mutableListOf<MediaItem>()
+        var index = player.currentMediaItemIndex
+        for (i in 0 until PREFETCH_AHEAD) {
+            index = timeline.getNextWindowIndex(index, player.repeatMode, player.shuffleModeEnabled)
+            if (index == C.INDEX_UNSET) break
+            targets += player.getMediaItemAt(index)
+        }
+        val wanted = targets.map { it.mediaId }.toSet()
+        prefetchJobs.keys.filter { it !in wanted }.forEach { prefetchJobs.remove(it)?.cancel() }
+        for (item in targets) {
+            val id = item.mediaId
+            val uri = item.localConfiguration?.uri ?: continue
+            if (prefetchJobs.containsKey(id) || OfflineStore.file(id) != null) continue
+            val job = scope.launch(Dispatchers.IO) {
+                try {
+                    val source = prefetchSources.createDataSource()
+                    val writer = CacheWriter(source, DataSpec.Builder().setUri(uri).build(), ByteArray(64 * 1024), null)
+                    coroutineContext[Job]?.invokeOnCompletion { writer.cancel() }
+                    writer.cache()
+                } catch (_: Exception) {
+                    // Réseau coupé ou titre indisponible : la lecture normale réessaiera le moment venu.
+                } finally {
+                    prefetchJobs.remove(id)
+                }
+            }
+            prefetchJobs[id] = job
+        }
+    }
+
+    // --- minuteur de sommeil ------------------------------------------------------------
+
+    private fun publishSleep() {
+        session?.setSessionExtras(
+            Bundle().apply {
+                putString(EXTRA_SLEEP_MODE, sleepMode)
+                putLong(EXTRA_SLEEP_END, sleepEndAt)
+            },
+        )
+    }
+
+    /** Demande au lecteur de se mettre en pause à la fin du titre en cours (propre à ExoPlayer). */
+    private fun pauseAtEnd(player: Player, value: Boolean) {
+        (player as? ExoPlayer)?.pauseAtEndOfMediaItems = value
+    }
+
+    private fun cancelSleep(player: Player) {
+        sleepJob?.cancel()
+        sleepJob = null
+        sleepMode = ""
+        sleepEndAt = 0L
+        pauseAtEnd(player, false)
+        player.volume = 1f
+        publishSleep()
+    }
+
+    /** [mode] : [SLEEP_TIME] (dans [minutes] minutes), [SLEEP_TRACK] (fin du titre), [SLEEP_QUEUE] (fin de la file) ou arrêt. */
+    private fun startSleep(player: Player, mode: String, minutes: Int) {
+        cancelSleep(player)
+        when (mode) {
+            SLEEP_TIME -> {
+                if (minutes <= 0) return
+                sleepMode = SLEEP_TIME
+                sleepEndAt = System.currentTimeMillis() + minutes * 60_000L
+                sleepJob = scope.launch {
+                    // Le son baisse doucement pendant les dernières secondes avant de s'arrêter.
+                    delay((sleepEndAt - System.currentTimeMillis() - SLEEP_FADE_MS).coerceAtLeast(0))
+                    val steps = 20
+                    for (i in steps - 1 downTo 0) {
+                        player.volume = i / steps.toFloat()
+                        delay(SLEEP_FADE_MS / steps)
+                    }
+                    player.pause()
+                    cancelSleep(player)
+                }
+            }
+            SLEEP_TRACK -> {
+                sleepMode = SLEEP_TRACK
+                pauseAtEnd(player, true)
+            }
+            SLEEP_QUEUE -> {
+                sleepMode = SLEEP_QUEUE
+                pauseAtEnd(player, !player.hasNextMediaItem())
+            }
+        }
+        publishSleep()
+    }
+
+    /** En mode « fin de la file », on ne s'arrête qu'à la fin du dernier titre. */
+    private fun updateSleepForTransition(player: Player) {
+        if (sleepMode == SLEEP_QUEUE) pauseAtEnd(player, !player.hasNextMediaItem())
     }
 
     /** Bouton cœur : affiché par la notification, l'écran de verrouillage et Android Auto. */
@@ -237,6 +380,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        prefetchJobs.values.forEach { it.cancel() }
         session?.player?.let { p -> QueueStore.snapshot(p)?.let { QueueStore.write(applicationContext, it) } }
         session?.run {
             player.release()
@@ -255,6 +399,7 @@ class PlaybackService : MediaLibraryService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                 .add(LIKE_COMMAND)
+                .add(SLEEP_COMMAND)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -275,6 +420,10 @@ class PlaybackService : MediaLibraryService() {
                         if (client != null) Likes.toggle(client, id)
                     }
                 }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == SLEEP_COMMAND.customAction) {
+                startSleep(session.player, args.getString(EXTRA_SLEEP_MODE).orEmpty(), args.getInt(EXTRA_SLEEP_MINUTES, 0))
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
@@ -406,7 +555,16 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private companion object {
+        const val EXTRA_SLEEP_MODE = MediaItems.EXTRA_SLEEP_MODE
+        const val EXTRA_SLEEP_END = MediaItems.EXTRA_SLEEP_END
+        const val EXTRA_SLEEP_MINUTES = MediaItems.EXTRA_SLEEP_MINUTES
+        const val SLEEP_TIME = MediaItems.SLEEP_TIME
+        const val SLEEP_TRACK = MediaItems.SLEEP_TRACK
+        const val SLEEP_QUEUE = MediaItems.SLEEP_QUEUE
         const val RADIO_LOW_WATER = 5
+        const val PREFETCH_AHEAD = 2
+        const val SLEEP_FADE_MS = 8_000L
         val LIKE_COMMAND = SessionCommand("sillon.TOGGLE_LIKE", Bundle.EMPTY)
+        val SLEEP_COMMAND = SessionCommand("sillon.SLEEP", Bundle.EMPTY)
     }
 }

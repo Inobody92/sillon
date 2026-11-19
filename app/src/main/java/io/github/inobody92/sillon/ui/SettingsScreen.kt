@@ -23,7 +23,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -34,6 +39,10 @@ import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.AudioQuality
 import io.github.inobody92.sillon.data.Downloads
 import io.github.inobody92.sillon.data.OfflineStore
+import io.github.inobody92.sillon.playback.AudioCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.github.inobody92.sillon.data.SynoClient
 import io.github.inobody92.sillon.data.ThemeMode
 
@@ -44,6 +53,10 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () 
     val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val cacheMb by AppSettings.cacheMaxMb.collectAsStateWithLifecycle()
+    var cacheUsed by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) { cacheUsed = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) } }
     val savedWifi by AppSettings.wifiQuality.collectAsStateWithLifecycle()
     val savedMobile by AppSettings.mobileQuality.collectAsStateWithLifecycle()
     // Sans conversion possible, la qualité réellement appliquée est toujours l'originale.
@@ -95,6 +108,36 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () 
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Section("Cache de lecture")
+                Text(
+                    "Les titres déjà écoutés ou préchargés sont gardés ici : ils repartent sans repasser par le NAS " +
+                        "et l'enchaînement ne dépend plus du réseau.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                listOf(256, 512, 1024, 2048, 5120).forEach { mb ->
+                    OptionRow(if (mb >= 1024) "${mb / 1024} Go" else "$mb Mo", selected = cacheMb == mb) {
+                        AppSettings.setCacheMaxMb(mb)
+                    }
+                }
+                Text(
+                    "Taille appliquée au prochain démarrage de la lecture. Actuellement utilisé : ${formatBytes(cacheUsed)}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                OutlinedButton(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            AudioCache.clear(context)
+                            cacheUsed = AudioCache.usedBytes(context)
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                ) { Text("Vider le cache") }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Hors-ligne")

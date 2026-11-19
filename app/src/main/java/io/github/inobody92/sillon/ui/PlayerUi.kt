@@ -1,6 +1,7 @@
 package io.github.inobody92.sillon.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -27,7 +29,10 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -47,12 +52,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import coil3.ImageLoader
+import io.github.inobody92.sillon.playback.MediaItems
 import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
+import io.github.inobody92.sillon.playback.SleepState
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -123,10 +131,13 @@ fun NowPlayingScreen(
     player: PlayerController,
     imageLoader: ImageLoader,
     client: SynoClient?,
+    sleep: SleepState,
+    onSetSleep: (mode: String, minutes: Int) -> Unit,
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
     onAddToPlaylist: ((mediaId: String) -> Unit)?,
 ) {
+    var showSleepDialog by remember { mutableStateOf(false) }
     val position = rememberPosition(player, active = true)
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
@@ -230,14 +241,35 @@ fun NowPlayingScreen(
                 IconButton(onClick = onOpenQueue) {
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "File d'attente")
                 }
+                IconButton(onClick = { showSleepDialog = true }) {
+                    Icon(
+                        Icons.Filled.Bedtime,
+                        contentDescription = "Minuteur de sommeil",
+                        tint = if (sleep.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (onAddToPlaylist != null) {
                     IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
                         Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
                     }
                 }
             }
+            if (sleep.active) {
+                SleepStatus(sleep)
+            }
             Spacer(Modifier.weight(1f))
         }
+    }
+
+    if (showSleepDialog) {
+        SleepTimerDialog(
+            current = sleep,
+            onDismiss = { showSleepDialog = false },
+            onSelect = { mode, minutes ->
+                showSleepDialog = false
+                onSetSleep(mode, minutes)
+            },
+        )
     }
 }
 
@@ -272,4 +304,85 @@ private fun RatingRow(client: SynoClient, mediaId: String) {
             }
         }
     }
+}
+
+/** Ce que fera le minuteur : compte à rebours, ou arrêt à la fin du titre / de la file. */
+@Composable
+private fun SleepStatus(sleep: SleepState) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sleep) {
+        while (sleep.mode == MediaItems.SLEEP_TIME) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val text = when (sleep.mode) {
+        MediaItems.SLEEP_TIME -> "Arrêt dans " + formatTime((sleep.endAtMs - now).coerceAtLeast(0))
+        MediaItems.SLEEP_TRACK -> "Arrêt à la fin du titre"
+        else -> "Arrêt à la fin de la file"
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+@Composable
+private fun SleepTimerDialog(current: SleepState, onDismiss: () -> Unit, onSelect: (String, Int) -> Unit) {
+    var custom by remember { mutableStateOf(false) }
+    if (custom) {
+        var minutes by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Autre durée") },
+            text = {
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = { minutes = it.filter(Char::isDigit).take(3) },
+                    label = { Text("Minutes (1 à 600)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            },
+            confirmButton = {
+                val value = minutes.toIntOrNull()
+                TextButton(
+                    enabled = value != null && value in 1..600,
+                    onClick = { onSelect(MediaItems.SLEEP_TIME, value ?: 0) },
+                ) { Text("Démarrer") }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        )
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Minuteur de sommeil") },
+        text = {
+            Column {
+                listOf(15, 30, 45, 60, 90).forEach { m ->
+                    SleepOption("Dans $m minutes") { onSelect(MediaItems.SLEEP_TIME, m) }
+                }
+                SleepOption("Autre durée…") { custom = true }
+                SleepOption("À la fin du titre") { onSelect(MediaItems.SLEEP_TRACK, 0) }
+                SleepOption("À la fin de la file") { onSelect(MediaItems.SLEEP_QUEUE, 0) }
+                if (current.active) {
+                    SleepOption("Annuler le minuteur") { onSelect(MediaItems.SLEEP_OFF, 0) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Fermer") } },
+    )
+}
+
+@Composable
+private fun SleepOption(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+    )
 }

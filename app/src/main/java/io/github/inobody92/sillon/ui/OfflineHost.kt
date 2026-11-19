@@ -30,6 +30,7 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
     val context = LocalContext.current
     val player = playerViewModel.controller
     val playerUi by player.ui.collectAsStateWithLifecycle()
+    val sleep by player.sleep.collectAsStateWithLifecycle()
     // Les pochettes sont des fichiers locaux : le chargeur d'images standard suffit (pas de client NAS).
     val imageLoader = remember { ImageLoader.Builder(context).build() }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
@@ -62,6 +63,8 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
             NowPlayingScreen(
                 playerUi, player, imageLoader,
                 client = null, // notation et ajout à une playlist demandent le NAS
+                sleep = sleep,
+                onSetSleep = player::setSleepTimer,
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = null,
