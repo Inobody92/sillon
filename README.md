@@ -11,13 +11,13 @@ fichiers) avec une application neuve : Kotlin, Jetpack Compose, Media3.
 
 ## État
 
-Lot 1 en cours : connexion au NAS (OTP, device de confiance, certificat auto-signé optionnel) et grille d'albums avec pochettes. Le protocole est documenté dans [`docs/API.md`](docs/API.md).
+Lots 1 et 2 : connexion au NAS (OTP, device de confiance), albums avec pochettes, détail d'album et lecture en arrière-plan (Media3). Le protocole est documenté dans [`docs/API.md`](docs/API.md).
 
 ## Feuille de route
 
 - [x] Connexion (adresse, compte, OTP) et stockage sécurisé
-- [ ] Bibliothèque : albums, artistes, morceaux, pochettes
-- [ ] Lecteur : file d'attente, arrière-plan, écran de verrouillage
+- [x] Albums, détail d'album, pochettes (artistes à venir)
+- [x] Lecteur : arrière-plan, notification, écran de verrouillage (file d'attente éditable à venir)
 - [ ] Playlists : création, édition, réordonnancement
 - [ ] Recherche, hors-ligne, Android Auto, paroles, tags
 

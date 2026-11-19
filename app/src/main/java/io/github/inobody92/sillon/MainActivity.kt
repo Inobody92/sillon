@@ -14,15 +14,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.inobody92.sillon.ui.AlbumsScreen
 import io.github.inobody92.sillon.ui.AuthState
+import io.github.inobody92.sillon.ui.LoggedInHost
 import io.github.inobody92.sillon.ui.LoginScreen
 import io.github.inobody92.sillon.ui.MainViewModel
+import io.github.inobody92.sillon.ui.PlayerViewModel
 import io.github.inobody92.sillon.ui.SillonTheme
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private val playerViewModel: PlayerViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +45,7 @@ class MainActivity : ComponentActivity() {
                             onLogin = viewModel::login,
                             modifier = Modifier.safeDrawingPadding(),
                         )
-                        is AuthState.LoggedIn -> AlbumsScreen(s.client, onLogout = viewModel::logout)
+                        is AuthState.LoggedIn -> LoggedInHost(s.client, playerViewModel, onLogout = viewModel::logout)
                     }
                 }
             }

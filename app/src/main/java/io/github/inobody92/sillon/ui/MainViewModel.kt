@@ -7,6 +7,7 @@ import io.github.inobody92.sillon.data.ApiException
 import io.github.inobody92.sillon.data.Credentials
 import io.github.inobody92.sillon.data.OtpRequiredException
 import io.github.inobody92.sillon.data.SecureStore
+import io.github.inobody92.sillon.data.SessionHolder
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +58,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun logout() {
         val current = (_state.value as? AuthState.LoggedIn)?.client
         store.forgetPassword()
+        SessionHolder.client = null
         _state.value = AuthState.LoggedOut()
         if (current != null) viewModelScope.launch { current.logout() }
     }
@@ -68,6 +70,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 client.connect(otp)
                 store.save(creds.copy(deviceId = client.deviceId))
+                SessionHolder.client = client
                 _state.value = AuthState.LoggedIn(client)
             } catch (_: OtpRequiredException) {
                 _state.value = AuthState.LoggedOut(otpRequired = true)

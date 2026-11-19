@@ -33,6 +33,24 @@ data class Album(val name: String, val albumArtist: String, val artist: String, 
     val displayArtist: String get() = albumArtist.ifBlank { artist }
 }
 
+data class Song(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val albumArtist: String,
+    val track: Int,
+    val disc: Int,
+    val durationSec: Int,
+    val ext: String,
+)
+
+/** Session active, partagée avec le service de lecture (qui vit hors de l'interface). */
+object SessionHolder {
+    @Volatile
+    var client: SynoClient? = null
+}
+
 /**
  * Client minimal pour l'API web Audio Station (voir docs/API.md).
  * Les chemins des APIs sont découverts via query.cgi, jamais codés en dur.
@@ -100,6 +118,49 @@ class SynoClient(val creds: Credentials) {
                 year = o.optInt("year"),
             )
         }
+    }
+
+    suspend fun songs(album: Album): List<Song> {
+        val params = mutableMapOf(
+            "offset" to "0",
+            "limit" to "1000",
+            "library" to "all",
+            "album" to album.name,
+            "additional" to "song_tag,song_audio",
+        )
+        if (album.albumArtist.isNotBlank()) params["album_artist"] = album.albumArtist
+        val data = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data")
+        val arr = data.optJSONArray("songs") ?: return emptyList()
+        return List(arr.length()) { i ->
+            val o = arr.getJSONObject(i)
+            val tag = o.optJSONObject("additional")?.optJSONObject("song_tag")
+            val audio = o.optJSONObject("additional")?.optJSONObject("song_audio")
+            Song(
+                id = o.getString("id"),
+                title = o.optString("title"),
+                artist = tag?.optString("artist").orEmpty(),
+                album = tag?.optString("album").orEmpty(),
+                albumArtist = tag?.optString("album_artist").orEmpty(),
+                track = tag?.optInt("track") ?: 0,
+                disc = tag?.optInt("disc", 1) ?: 1,
+                durationSec = audio?.optInt("duration") ?: 0,
+                ext = o.optString("path").substringAfterLast('.', "").lowercase(),
+            )
+        }.sortedWith(compareBy({ it.disc }, { it.track }, { it.title }))
+    }
+
+    /** URL de lecture directe d'un morceau, avec le sid courant. */
+    fun streamUrl(songId: String, ext: String): String? {
+        val info = apis["SYNO.AudioStation.Stream"] ?: return null
+        return webapiUrl(info.path).newBuilder()
+            .addQueryParameter("api", "SYNO.AudioStation.Stream")
+            .addQueryParameter("method", "stream")
+            .addQueryParameter("version", "1")
+            .addQueryParameter("id", songId)
+            .addQueryParameter("_sid", sid.orEmpty())
+            .addQueryParameter("ext", ".$ext")
+            .build()
+            .toString()
     }
 
     /** URL de pochette. Le sid est ajouté à part pour ne pas polluer la clé de cache d'image. */
@@ -193,6 +254,10 @@ class SynoClient(val creds: Credentials) {
     companion object {
         private val SESSION_ERRORS = setOf(106, 107, 119)
         private const val ERROR_OTP_REQUIRED = 403
+
+        /** Clé de cache stable pour une URL : on retire le sid, qui change à chaque connexion. */
+        fun stableKey(url: String): String =
+            url.toHttpUrl().newBuilder().removeAllQueryParameters("_sid").build().toString()
 
         /** Accepte https://hôte[:port] ou hôte[:port] ; refuse le HTTP clair. */
         fun normalizeUrl(input: String): String {

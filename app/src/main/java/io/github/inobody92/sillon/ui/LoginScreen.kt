@@ -60,7 +60,8 @@ fun LoginScreen(
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },
-            label = { Text("Adresse du NAS (ex. monnas.synology.me:5001)") },
+            label = { Text("Adresse du NAS") },
+            placeholder = { Text("monnas.synology.me:5001") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
