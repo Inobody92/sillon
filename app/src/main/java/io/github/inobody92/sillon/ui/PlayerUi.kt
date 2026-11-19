@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -142,6 +143,7 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
     onAddToPlaylist: ((mediaId: String) -> Unit)?,
+    onOpenEqualizer: () -> Unit,
 ) {
     var showSleepDialog by remember { mutableStateOf(false) }
     val position = rememberPosition(player, active = true)
@@ -160,15 +162,20 @@ fun NowPlayingScreen(
                 }
                 // Affiche l'icône du mode suivant : platine, égaliseur, pochette, puis retour à la platine.
                 val next = PlayerVisual.entries[(visual.ordinal + 1) % PlayerVisual.entries.size]
-                IconButton(onClick = { AppSettings.setPlayerVisual(next) }) {
-                    Icon(
-                        when (next) {
-                            PlayerVisual.TURNTABLE -> Icons.Filled.Album
-                            PlayerVisual.EQUALIZER -> Icons.Filled.GraphicEq
-                            PlayerVisual.COVER -> Icons.Filled.Image
-                        },
-                        contentDescription = "Affichage : ${next.label}",
-                    )
+                Row {
+                    IconButton(onClick = onOpenEqualizer) {
+                        Icon(Icons.Filled.Tune, contentDescription = "Égaliseur et préréglages")
+                    }
+                    IconButton(onClick = { AppSettings.setPlayerVisual(next) }) {
+                        Icon(
+                            when (next) {
+                                PlayerVisual.TURNTABLE -> Icons.Filled.Album
+                                PlayerVisual.EQUALIZER -> Icons.Filled.GraphicEq
+                                PlayerVisual.COVER -> Icons.Filled.Image
+                            },
+                            contentDescription = "Affichage : ${next.label}",
+                        )
+                    }
                 }
             }
             Spacer(Modifier.weight(0.5f))

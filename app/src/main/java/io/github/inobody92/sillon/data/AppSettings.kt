@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import io.github.inobody92.sillon.playback.EqPreset
+import io.github.inobody92.sillon.playback.EqPresets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +51,16 @@ object AppSettings {
     private val _playerVisual = MutableStateFlow(PlayerVisual.TURNTABLE)
     val playerVisual: StateFlow<PlayerVisual> = _playerVisual.asStateFlow()
 
+    private val _eqEnabled = MutableStateFlow(false)
+    val eqEnabled: StateFlow<Boolean> = _eqEnabled.asStateFlow()
+
+    /** Identifiant du préréglage actif, ou [EqPresets.CUSTOM_ID] dès qu'un curseur a été touché. */
+    private val _eqPreset = MutableStateFlow(EqPresets.NEUTRAL_ID)
+    val eqPreset: StateFlow<String> = _eqPreset.asStateFlow()
+
+    private val _eqGains = MutableStateFlow(EqPresets.all.first().gains)
+    val eqGains: StateFlow<List<Float>> = _eqGains.asStateFlow()
+
     private val _dynamicColors = MutableStateFlow(false)
     val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
 
@@ -73,6 +85,9 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
+        _eqEnabled.value = prefs.getBoolean(K_EQ_ON, false)
+        _eqPreset.value = prefs.getString(K_EQ_PRESET, null) ?: EqPresets.NEUTRAL_ID
+        _eqGains.value = EqPresets.decode(prefs.getString(K_EQ_GAINS, null))
         _playerVisual.value = prefs.getString(K_VISUAL, null)
             ?.let { name -> PlayerVisual.entries.firstOrNull { it.name == name } }
             // Ancien réglage booléen : platine ou pochette seule.
@@ -92,6 +107,26 @@ object AppSettings {
     fun setPlayerVisual(value: PlayerVisual) {
         _playerVisual.value = value
         prefs.edit().putString(K_VISUAL, value.name).apply()
+    }
+
+    fun setEqEnabled(value: Boolean) {
+        _eqEnabled.value = value
+        prefs.edit().putBoolean(K_EQ_ON, value).apply()
+    }
+
+    fun selectEqPreset(preset: EqPreset) = saveEq(preset.id, preset.gains)
+
+    /** Un curseur a bougé : les gains deviennent « personnalisés ». */
+    fun setEqBand(index: Int, db: Float) {
+        val gains = _eqGains.value.toMutableList()
+        gains[index] = db.coerceIn(-EqPresets.MAX_DB, EqPresets.MAX_DB)
+        saveEq(EqPresets.CUSTOM_ID, gains)
+    }
+
+    private fun saveEq(presetId: String, gains: List<Float>) {
+        _eqPreset.value = presetId
+        _eqGains.value = gains
+        prefs.edit().putString(K_EQ_PRESET, presetId).putString(K_EQ_GAINS, EqPresets.encode(gains)).apply()
     }
 
     fun setDynamicColors(value: Boolean) {
@@ -144,4 +179,7 @@ object AppSettings {
     private const val K_DYNAMIC = "dynamic_colors"
     private const val K_TURNTABLE = "turntable"
     private const val K_VISUAL = "player_visual"
+    private const val K_EQ_ON = "eq_enabled"
+    private const val K_EQ_PRESET = "eq_preset"
+    private const val K_EQ_GAINS = "eq_gains"
 }

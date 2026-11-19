@@ -50,6 +50,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import okhttp3.Call
 import java.io.IOException
@@ -68,6 +69,7 @@ class PlaybackService : MediaLibraryService() {
 
     private var session: MediaLibrarySession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val equalizer = EqualizerEffect()
     private lateinit var tree: LibraryTree
 
     /** Morceau pour lequel on a déjà tenté une reconnexion (évite les boucles). */
@@ -153,6 +155,16 @@ class PlaybackService : MediaLibraryService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+        // Égaliseur d'Android : suit la session audio du lecteur et les réglages de l'utilisateur.
+        player.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) = equalizer.attach(audioSessionId)
+        })
+        equalizer.attach(player.audioSessionId)
+        scope.launch {
+            combine(AppSettings.eqEnabled, AppSettings.eqGains) { on, gains -> on to gains }
+                .collect { (on, gains) -> equalizer.update(on, gains) }
+        }
 
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -398,6 +410,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        equalizer.release()
         prefetchJobs.values.forEach { it.cancel() }
         session?.player?.let { p -> QueueStore.snapshot(p)?.let { QueueStore.write(applicationContext, it) } }
         session?.run {

@@ -98,6 +98,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showDownloads by rememberSaveable { mutableStateOf(false) }
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
     var albumsGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var artist by rememberSaveable { mutableStateOf<String?>(null) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
@@ -132,10 +133,11 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     )
 
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
+    BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showDownloads) { showDownloads = false }
-    BackHandler(enabled = showSettings && !showDownloads) { showSettings = false }
+    BackHandler(enabled = showSettings && !showDownloads && !showEqualizer) { showSettings = false }
     BackHandler(enabled = showQueue) { showQueue = false }
-    BackHandler(enabled = nowPlaying && !showQueue && !showSettings && !showDownloads) { nowPlaying = false }
+    BackHandler(enabled = nowPlaying && !showQueue && !showSettings && !showDownloads && !showEqualizer) { nowPlaying = false }
     BackHandler(enabled = !nowPlaying && album != null) { album = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist != null) { playlist = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist != null) { artist = null }
@@ -452,6 +454,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = { mediaId -> addTarget = listOf(mediaId) },
+                onOpenEqualizer = { showEqualizer = true },
             )
         }
         if (showSettings) {
@@ -459,9 +462,11 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 client = client,
                 onClose = { showSettings = false },
                 onOpenDownloads = { showDownloads = true },
+                onOpenEqualizer = { showEqualizer = true },
                 onLogout = { showSettings = false; onLogout() },
             )
         }
+        if (showEqualizer) EqualizerScreen(onClose = { showEqualizer = false })
         if (showDownloads) {
             DownloadsScreen(
                 client = client,

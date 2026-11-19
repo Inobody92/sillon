@@ -50,7 +50,13 @@ import io.github.inobody92.sillon.data.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
+fun SettingsScreen(
+    client: SynoClient,
+    onClose: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenEqualizer: () -> Unit,
+    onLogout: () -> Unit,
+) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
     val dynamicColors by AppSettings.dynamicColors.collectAsStateWithLifecycle()
     val visual by AppSettings.playerVisual.collectAsStateWithLifecycle()
@@ -84,6 +90,12 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () 
                     OptionRow(mode.label, selected = theme == mode) { AppSettings.setTheme(mode) }
                 }
 
+                Section("Son")
+                OutlinedButton(onClick = onOpenEqualizer, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Égaliseur et préréglages")
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Écran de lecture")
                 PlayerVisual.entries.forEach { v ->
                     OptionRow(v.label, selected = visual == v) { AppSettings.setPlayerVisual(v) }

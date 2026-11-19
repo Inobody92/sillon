@@ -35,9 +35,11 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
     val imageLoader = remember { ImageLoader.Builder(context).build() }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(enabled = showQueue) { showQueue = false }
-    BackHandler(enabled = nowPlaying && !showQueue) { nowPlaying = false }
+    BackHandler(enabled = showEqualizer) { showEqualizer = false }
+    BackHandler(enabled = showQueue && !showEqualizer) { showQueue = false }
+    BackHandler(enabled = nowPlaying && !showQueue && !showEqualizer) { nowPlaying = false }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -68,10 +70,12 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
                 onClose = { nowPlaying = false },
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = null,
+                onOpenEqualizer = { showEqualizer = true },
             )
         }
         if (showQueue && playerUi.hasItem) {
             QueueScreen(playerUi, player, imageLoader, client = null, onClose = { showQueue = false })
         }
+        if (showEqualizer) EqualizerScreen(onClose = { showEqualizer = false })
     }
 }
