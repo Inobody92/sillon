@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -157,6 +158,7 @@ fun HomeScreen(
     onOpenAlbum: (Album) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenLiked: () -> Unit,
+    onOpenAddMusic: (() -> Unit)?,
     onSettings: () -> Unit,
 ) {
     // L'historique change à chaque écoute : on le relit à chaque retour sur l'accueil.
@@ -217,12 +219,29 @@ fun HomeScreen(
                                 if (offline.songs.isEmpty() && offline.pendingCount == 0) {
                                     "Télécharge des albums et des playlists"
                                 } else {
-                                    "${offline.songs.size} titres · ${formatBytes(offline.bytes)}" +
+                                    (if (offline.songs.size == 1) "1 titre" else "${offline.songs.size} titres") + " · ${formatBytes(offline.bytes)}" +
                                         if (offline.pendingCount > 0) " · ${offline.pendingCount} en attente" else ""
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+            if (onOpenAddMusic != null) {
+                item(key = "add-music") {
+                    Card(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clickable(onClick = onOpenAddMusic)) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LibraryAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                Text("Ajouter de la musique", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Chercher une chanson ou un artiste et l'envoyer dans ta bibliothèque",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

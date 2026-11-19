@@ -45,6 +45,25 @@ class SecureStore(context: Context) {
     fun lastAccount(): String = prefs.getString(K_ACCOUNT, "") ?: ""
     fun lastInsecure(): Boolean = prefs.getBoolean(K_INSECURE, false)
 
+    /** Serveur de téléchargement (facultatif) : adresse, jeton chiffré, empreinte du certificat épinglé. */
+    fun saveDownloadServer(c: DownloadServerConfig) {
+        prefs.edit()
+            .putString(K_DS_URL, c.url)
+            .putString(K_DS_TOKEN, encrypt(c.token))
+            .putString(K_DS_PIN, c.pinnedSha256)
+            .apply()
+    }
+
+    fun loadDownloadServer(): DownloadServerConfig? {
+        val url = prefs.getString(K_DS_URL, null) ?: return null
+        val token = prefs.getString(K_DS_TOKEN, null)?.let { runCatching { decrypt(it) }.getOrNull() } ?: return null
+        return DownloadServerConfig(url, token, prefs.getString(K_DS_PIN, null))
+    }
+
+    fun clearDownloadServer() {
+        prefs.edit().remove(K_DS_URL).remove(K_DS_TOKEN).remove(K_DS_PIN).apply()
+    }
+
     /** Oublie le mot de passe mais garde l'adresse, le compte et le device de confiance. */
     fun forgetPassword() {
         prefs.edit().remove(K_PASSWORD).apply()
@@ -90,5 +109,8 @@ class SecureStore(context: Context) {
         const val K_DEVICE = "device_id"
         const val K_PIN = "pinned_sha256"
         const val K_QC = "quickconnect_id"
+        const val K_DS_URL = "download_server_url"
+        const val K_DS_TOKEN = "download_server_token"
+        const val K_DS_PIN = "download_server_pin"
     }
 }

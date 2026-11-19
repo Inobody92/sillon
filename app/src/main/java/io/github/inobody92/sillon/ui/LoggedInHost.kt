@@ -64,6 +64,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.inobody92.sillon.data.DownloadServerStore
+import io.github.inobody92.sillon.data.DownloadServerClient
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.Downloads
 import io.github.inobody92.sillon.data.LibraryIndex
@@ -109,6 +111,9 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showDownloads by rememberSaveable { mutableStateOf(false) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
+    var showAddMusic by rememberSaveable { mutableStateOf(false) }
+    var showProgress by rememberSaveable { mutableStateOf(false) }
+    val downloadServer by DownloadServerStore.config.collectAsStateWithLifecycle()
     var albumsGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var artist by rememberSaveable { mutableStateOf<String?>(null) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
@@ -144,6 +149,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
 
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
+    BackHandler(enabled = showAddMusic && !showProgress) { showAddMusic = false }
+    BackHandler(enabled = showProgress) { showProgress = false }
     BackHandler(enabled = showDownloads) { showDownloads = false }
     BackHandler(enabled = showSettings && !showDownloads && !showEqualizer) { showSettings = false }
     BackHandler(enabled = showQueue) { showQueue = false }
@@ -396,6 +403,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             onOpenAlbum = { album = it },
                             onOpenDownloads = { showDownloads = true },
                             onOpenLiked = ::openLiked,
+                            onOpenAddMusic = if (downloadServer != null) ({ showAddMusic = true }) else null,
                             onSettings = { showSettings = true },
                         )
                     }
@@ -480,6 +488,20 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             )
         }
         if (showEqualizer) EqualizerScreen(onClose = { showEqualizer = false })
+        downloadServer?.takeIf { showAddMusic }?.let { config ->
+            val addMusicVm: AddMusicViewModel = viewModel(
+                key = "add-music-${config.hashCode()}",
+                factory = viewModelFactory { initializer { AddMusicViewModel(DownloadServerClient.create(config), client) } },
+            )
+            AddMusicScreen(
+                addMusicVm, imageLoader,
+                polling = !showProgress,
+                onOpenProgress = { showProgress = true },
+                onClose = { showAddMusic = false },
+                onMessage = showMessage,
+            )
+            if (showProgress) DownloadProgressScreen(addMusicVm, onClose = { showProgress = false })
+        }
         if (showDownloads) {
             DownloadsScreen(
                 client = client,

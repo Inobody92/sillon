@@ -203,6 +203,9 @@ fun SettingsScreen(
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                DownloadServerSection()
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Section("Compte")
                 Text(
                     "${client.creds.account} · ${client.creds.url.removePrefix("https://")}",
