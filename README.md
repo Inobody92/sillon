@@ -9,24 +9,27 @@ fichiers) avec une application neuve : Kotlin, Jetpack Compose, Media3.
 > Projet indépendant, non affilié à Synology Inc. « Synology » et « Audio Station » sont des
 > marques de leurs propriétaires. Sillon utilise uniquement l'API web de ton propre NAS.
 
-## État
+## Fonctions
 
-Lots 1 à 5 : connexion au NAS (OTP, device de confiance), albums avec pochettes, lecture en arrière-plan (Media3), playlists, recherche, file d'attente, artistes et genres. Le protocole est documenté dans [`docs/API.md`](docs/API.md).
+- Connexion au NAS (adresse, compte, double authentification, appareil de confiance), identifiants chiffrés
+- Albums, artistes, genres, recherche, pochettes
+- Lecture en arrière-plan (notification, écran de verrouillage), file d'attente éditable, aléatoire, répétition,
+  file conservée après redémarrage
+- Playlists : création, ajout, retrait, réordonnancement par glisser-déposer, renommage, suppression
+- Titres likés : une vraie playlist du NAS, un seul exemplaire par titre, cœur sur chaque titre
+- Notation par étoiles
+- Accueil : mix du jour (stable dans la journée, évite les titres écoutés récemment) et radios par humeur sans fin
+- Hors-ligne : albums et playlists téléchargés (Wi-Fi uniquement par défaut), lecture sans NAS
+- Android Auto : navigation (radio, albums, artistes, playlists) et lecture, testé avec le simulateur et en voiture
+- Mode sombre, qualité audio (si le NAS sait convertir en MP3)
 
-## Feuille de route
+Le protocole est documenté dans [`docs/API.md`](docs/API.md) et le test d'Android Auto dans
+[`docs/ANDROID_AUTO.md`](docs/ANDROID_AUTO.md).
 
-- [x] Connexion (adresse, compte, OTP) et stockage sécurisé
-- [x] Albums, détail d'album, pochettes (artistes à venir)
-- [x] Lecteur : arrière-plan, notification, écran de verrouillage (file d'attente éditable à venir)
-- [x] Playlists : création, ajout depuis un album ou un titre, retrait, réordonnancement par glisser-déposer, renommage, suppression
-- [x] Recherche (albums, titres), file d'attente (lire ensuite, ajouter à la file, réordonner), aléatoire, répétition
-- [x] Navigation par artistes et genres (lecture ou aléatoire d'un artiste entier)
-- [x] Réglages : mode sombre (système / clair / sombre), choix de la qualité audio Wi-Fi / mobile (si le NAS sait convertir en MP3)
-- [x] Filtre par genre sur la grille d'albums
-- [x] Accueil : mix du jour (stable dans la journée, orienté vers les titres peu écoutés) et radios par humeur sans fin (genres modifiables)
-- [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée.
-- [x] Hors-ligne : téléchargement d'albums et de playlists (Wi-Fi uniquement par défaut), lecture sans NAS, gestion de l'espace
-- [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée., paroles, édition des tags
+## À faire
+
+- [ ] Édition des tags
+- [ ] Recherche vocale dans Android Auto (non vérifiée)
 
 ## Compiler
 
