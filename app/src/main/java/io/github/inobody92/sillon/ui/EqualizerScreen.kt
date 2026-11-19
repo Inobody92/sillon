@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +29,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.inobody92.sillon.data.AppSettings
@@ -83,9 +87,12 @@ fun EqualizerScreen(onClose: () -> Unit) {
                                 label = { Text(preset.label) },
                             )
                         }
-                        if (presetId == EqPresets.CUSTOM_ID) {
-                            FilterChip(selected = true, onClick = {}, label = { Text("Personnalisé") })
-                        }
+                        // Toujours présent : s'il apparaissait au premier geste, il décalerait les curseurs sous le doigt.
+                        FilterChip(
+                            selected = presetId == EqPresets.CUSTOM_ID,
+                            onClick = { AppSettings.setEqEnabled(true) },
+                            label = { Text("Personnalisé") },
+                        )
                     }
 
                     Text(
@@ -93,26 +100,27 @@ fun EqualizerScreen(onClose: () -> Unit) {
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
                     )
-                    EqPresets.REFERENCE_HZ.forEachIndexed { index, hz ->
-                        val db = gains[index]
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(frequencyLabel(hz), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-                            Slider(
-                                value = db,
-                                onValueChange = {
-                                    // Pas d'un demi-décibel : plus précis n'a pas de sens à l'oreille.
-                                    AppSettings.setEqBand(index, (it * 2).roundToInt() / 2f)
-                                    AppSettings.setEqEnabled(true)
-                                },
-                                valueRange = -EqPresets.MAX_DB..EqPresets.MAX_DB,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                gainLabel(db),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(64.dp),
-                            )
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        EqPresets.REFERENCE_HZ.forEachIndexed { index, hz ->
+                            val db = gains[index]
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    gainLabel(db),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                VerticalSlider(
+                                    value = db,
+                                    onValueChange = {
+                                        // Pas d'un demi-décibel : plus précis n'a pas de sens à l'oreille.
+                                        AppSettings.setEqBand(index, (it * 2).roundToInt() / 2f)
+                                        AppSettings.setEqEnabled(true)
+                                    },
+                                    valueRange = -EqPresets.MAX_DB..EqPresets.MAX_DB,
+                                    modifier = Modifier.height(260.dp),
+                                )
+                                Text(frequencyLabel(hz), style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     }
                     Text(
@@ -120,7 +128,7 @@ fun EqualizerScreen(onClose: () -> Unit) {
                             "Pour plus de volume, baisse plutôt les bandes inutiles.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 12.dp),
+                        modifier = Modifier.padding(top = 16.dp),
                     )
                 }
             }
@@ -135,4 +143,36 @@ private fun gainLabel(db: Float): String = when {
     db > 0f -> "+%.1f dB".format(db)
     db < 0f -> "%.1f dB".format(db)
     else -> "0 dB"
+}
+
+/** Curseur vertical : un curseur ordinaire couché à 270°, haut = valeur max. Prend la hauteur imposée par [modifier]. */
+@Composable
+private fun VerticalSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        modifier = modifier
+            .graphicsLayer {
+                rotationZ = 270f
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+            .layout { measurable, constraints ->
+                // On mesure le curseur en largeur = hauteur disponible, puis on échange les dimensions.
+                val placeable = measurable.measure(
+                    Constraints(
+                        minWidth = constraints.minHeight,
+                        maxWidth = constraints.maxHeight,
+                        minHeight = constraints.minWidth,
+                        maxHeight = constraints.maxWidth,
+                    ),
+                )
+                layout(placeable.height, placeable.width) { placeable.place(-placeable.width, 0) }
+            },
+    )
 }
