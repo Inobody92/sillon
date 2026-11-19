@@ -11,3 +11,4 @@ local.properties
 # Ne jamais versionner d'identifiants ni de code tiers décompilé
 decompiled/
 secrets.properties
+keystore.properties

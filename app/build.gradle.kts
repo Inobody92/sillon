@@ -4,21 +4,50 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+import java.util.Properties
+
+// Identifiants de signature : jamais dans le dépôt. On cherche d'abord à la racine du projet, puis dans
+// ~/.sillon-signing/ (voir README). Sans eux, la variante release est construite non signée.
+val signingProps = Properties().apply {
+    listOf(
+        rootProject.file("keystore.properties"),
+        File(System.getProperty("user.home"), ".sillon-signing/keystore.properties"),
+    ).firstOrNull { it.exists() }?.inputStream()?.use { load(it) }
+}
+
+// Permet d'installer une variante de test à côté de l'application principale : -PappIdSuffix=.test
+val appIdSuffix = providers.gradleProperty("appIdSuffix").getOrElse("")
+
 android {
     namespace = "io.github.inobody92.sillon"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.inobody92.sillon"
+        applicationId = "io.github.inobody92.sillon$appIdSuffix"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        if (signingProps.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Code réduit et obfusqué, ressources inutilisées retirées : APK plus léger et plus rapide.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {
