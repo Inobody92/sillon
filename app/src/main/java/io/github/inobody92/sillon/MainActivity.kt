@@ -39,11 +39,38 @@ import io.github.inobody92.sillon.ui.UpdatePrompt
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private const val EXTRA_OPEN_PLAYER = "open_player"
+
+        /**
+         * Intention qui ramène dans l'application, sur l'écran de lecture : utilisée par la notification du lecteur
+         * (volet des notifications, écran verrouillé) et par le widget. Réutilise l'activité déjà ouverte.
+         */
+        fun openPlayerIntent(context: android.content.Context): android.content.Intent =
+            android.content.Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_OPEN_PLAYER, true)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    }
+
+    private fun handleIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_PLAYER)
+            io.github.inobody92.sillon.ui.OpenPlayerRequest.request()
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+
     private val viewModel: MainViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) handleIntent(intent)   // pas après une simple rotation
         AppSettings.init(applicationContext)
         OfflineStore.init(applicationContext)
         Likes.init(applicationContext)

@@ -93,9 +93,10 @@ class SillonWidgetReceiver : GlanceAppWidgetReceiver() {
 @androidx.compose.runtime.Composable
 private fun WidgetContent(s: WidgetSnapshot, cover: Bitmap?) {
     val size = LocalSize.current
-    val open = actionStartActivity(Intent(LocalContext.current, MainActivity::class.java))
+    val open = actionStartActivity(MainActivity.openPlayerIntent(LocalContext.current))
+    // Tout le fond du widget ramène dans l'application ; les boutons gardent leur propre action.
     val root = GlanceModifier.fillMaxSize().appWidgetBackground()
-        .background(GlanceTheme.colors.widgetBackground).cornerRadius(22.dp)
+        .background(GlanceTheme.colors.widgetBackground).cornerRadius(22.dp).clickable(open)
     when {
         size.height >= 180.dp -> Column(root.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val side = minOf(size.width - 28.dp, size.height - 130.dp)

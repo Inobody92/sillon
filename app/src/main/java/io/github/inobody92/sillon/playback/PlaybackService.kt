@@ -221,7 +221,12 @@ class PlaybackService : MediaLibraryService() {
             }
         })
 
-        session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+        // Toucher la notification (ou le lecteur réduit de l'écran verrouillé) ramène dans l'application, sur la lecture.
+        val openApp = android.app.PendingIntent.getActivity(
+            this, 0, io.github.inobody92.sillon.MainActivity.openPlayerIntent(this),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        session = MediaLibrarySession.Builder(this, player, LibraryCallback()).setSessionActivity(openApp).build()
         WidgetUpdater(applicationContext, player, scope).start()   // widget de l'écran d'accueil
 
         restoreQueue(player)

@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +40,17 @@ fun OfflineHost(playerViewModel: PlayerViewModel, onRetry: () -> Unit) {
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
+
+    val openRequest by OpenPlayerRequest.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(openRequest) {
+        if (!openRequest) return@LaunchedEffect
+        val ready = withTimeoutOrNull(5_000) { snapshotFlow { playerUi.hasItem }.first { it } }
+        if (ready == true) {
+            showQueue = false; showEqualizer = false
+            nowPlaying = true
+        }
+        OpenPlayerRequest.clear()
+    }
 
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showQueue && !showEqualizer) { showQueue = false }

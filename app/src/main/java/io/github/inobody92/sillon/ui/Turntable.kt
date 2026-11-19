@@ -240,7 +240,8 @@ fun Turntable(
             Modifier
                 .offset { IntOffset((g.cx - labelR).roundToInt(), (g.cy - labelR).roundToInt()) }
                 .size(with(LocalDensity.current) { (labelR * 2).toDp() })
-                .graphicsLayer { rotationZ = angle.value }
+                // Sens inverse des aiguilles d'une montre : cohérent avec le bras, qui descend vers l'étiquette.
+                .graphicsLayer { rotationZ = -angle.value }
                 .clip(CircleShape),
         ) {
             CoverImage(url = artwork, imageLoader = imageLoader, contentDescription = null, modifier = Modifier.fillMaxSize())

@@ -47,6 +47,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -148,6 +151,20 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     )
 
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
+    // Notification du lecteur ou widget : on revient sur l'écran de lecture, quel que soit l'écran resté ouvert.
+    val openRequest by OpenPlayerRequest.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(openRequest) {
+        if (!openRequest) return@LaunchedEffect
+        // Service qui vient de démarrer : on laisse un instant à la file enregistrée pour être restaurée.
+        val ready = withTimeoutOrNull(5_000) { snapshotFlow { playerUi.hasItem }.first { it } }
+        if (ready == true) {
+            showSettings = false; showDownloads = false; showQueue = false
+            showEqualizer = false; showAddMusic = false; showProgress = false
+            nowPlaying = true
+        }
+        OpenPlayerRequest.clear()
+    }
+
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showAddMusic && !showProgress) { showAddMusic = false }
     BackHandler(enabled = showProgress) { showProgress = false }
