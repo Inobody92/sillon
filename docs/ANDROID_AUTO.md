@@ -21,3 +21,8 @@ Android Auto tue parfois son processus : si `screenshot` répond « no video foc
 - Android Auto ne renvoie que l'identifiant du titre choisi (pas ses métadonnées) : le service retient le dossier
   d'origine de chaque titre affiché (`LibraryTree.parentOf`) pour continuer l'album ou la playlist.
 - Tant que la voiture est connectée, le téléphone refuse d'ouvrir les réglages d'Android Auto.
+
+## Bouton « Liker »
+Le service ajoute à la session un bouton cœur (`sillon.TOGGLE_LIKE`) qui bascule le titre en cours dans la playlist
+« Titres likés ». La notification, l'écran de verrouillage et Android Auto l'affichent sans code d'interface
+supplémentaire ; son icône (cœur plein ou vide) suit l'état du titre en cours.

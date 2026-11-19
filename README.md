@@ -16,7 +16,7 @@ fichiers) avec une application neuve : Kotlin, Jetpack Compose, Media3.
 - Lecture en arrière-plan (notification, écran de verrouillage), file d'attente éditable, aléatoire, répétition,
   file conservée après redémarrage
 - Playlists : création, ajout, retrait, réordonnancement par glisser-déposer, renommage, suppression
-- Titres likés : une vraie playlist du NAS, un seul exemplaire par titre, cœur sur chaque titre
+- Titres likés : une vraie playlist du NAS, un seul exemplaire par titre, cœur sur chaque titre, dans la notification et dans la voiture
 - Notation par étoiles
 - Accueil : mix du jour (stable dans la journée, évite les titres écoutés récemment) et radios par humeur sans fin
 - Hors-ligne : albums et playlists téléchargés (Wi-Fi uniquement par défaut), lecture sans NAS

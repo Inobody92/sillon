@@ -2,6 +2,7 @@ package io.github.inobody92.sillon.playback
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -15,13 +16,18 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.inobody92.sillon.data.AppSettings
+import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.SessionHolder
@@ -33,6 +39,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
 import okhttp3.Call
@@ -65,6 +72,7 @@ class PlaybackService : MediaLibraryService() {
         super.onCreate()
         AppSettings.init(applicationContext)
         OfflineStore.init(applicationContext)
+        Likes.init(applicationContext)
         tree = LibraryTree(applicationContext)
 
         // Réutilise le client HTTP de la session (certificat auto-signé compris).
@@ -104,6 +112,7 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 retriedMediaId = null
+                refreshLikeButton()
                 // Historique d'écoute (local) : alimente le mix du jour et la radio.
                 mediaItem?.mediaId?.takeIf { it.isNotBlank() }?.let { PlayHistory.record(applicationContext, it) }
                 maybeRefillRadio(player)
@@ -140,6 +149,9 @@ class PlaybackService : MediaLibraryService() {
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
 
         restoreQueue(player)
+        refreshLikeButton()
+        // Le cœur de la notification et de la voiture suit l'état « liké » du titre en cours.
+        scope.launch { Likes.state.collect { refreshLikeButton() } }
         // Pendant la lecture, on mémorise la position toutes les 20 s (un plantage ne fait pas perdre plus).
         scope.launch {
             while (true) {
@@ -147,6 +159,21 @@ class PlaybackService : MediaLibraryService() {
                 if (player.isPlaying) saveNow(player)
             }
         }
+    }
+
+    /** Bouton cœur : affiché par la notification, l'écran de verrouillage et Android Auto. */
+    private fun likeButton(liked: Boolean): CommandButton =
+        CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+            .setDisplayName(if (liked) "Retirer des titres likés" else "Liker")
+            .setSessionCommand(LIKE_COMMAND)
+            .build()
+
+    private fun refreshLikeButton() {
+        val s = session ?: return
+        val id = s.player.currentMediaItem?.mediaId
+        s.setMediaButtonPreferences(
+            if (id == null) ImmutableList.of() else ImmutableList.of(likeButton(Likes.isLiked(id))),
+        )
     }
 
     private fun scheduleSave(player: Player) {
@@ -221,6 +248,37 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                .add(LIKE_COMMAND)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == LIKE_COMMAND.customAction) {
+                val id = session.player.currentMediaItem?.mediaId
+                if (id != null) {
+                    scope.launch {
+                        val client = withContext(Dispatchers.IO) { activeClient() }
+                        if (client != null) Likes.toggle(client, id)
+                    }
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
@@ -349,5 +407,6 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val RADIO_LOW_WATER = 5
+        val LIKE_COMMAND = SessionCommand("sillon.TOGGLE_LIKE", Bundle.EMPTY)
     }
 }
