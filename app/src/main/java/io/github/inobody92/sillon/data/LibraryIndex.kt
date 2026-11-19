@@ -114,6 +114,12 @@ object LibraryIndex {
         _state.value = IndexState(ready = true, building = false, size = songs.size)
     }
 
+    /** Titres de l'index pour ces identifiants (dans l'ordre donné ; les inconnus sont ignorés). */
+    fun songsByIds(ids: List<String>): List<Song> {
+        val byId = entries.associateBy({ it.song.id }, { it.song })
+        return ids.mapNotNull { byId[it] }
+    }
+
     // --- recherche --------------------------------------------------------------------
 
     fun search(query: String): SearchResults {

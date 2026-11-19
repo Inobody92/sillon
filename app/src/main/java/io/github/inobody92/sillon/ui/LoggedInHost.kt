@@ -153,6 +153,27 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         }
     }
 
+    // Titres likés téléchargés automatiquement : chaque like ou retrait de like met la copie hors-ligne à jour.
+    val likesState by Likes.state.collectAsStateWithLifecycle()
+    val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
+    LaunchedEffect(likesState.revision, likesState.playlistId, autoLikes) {
+        val id = likesState.playlistId
+        if (id == null) {
+            // La playlist n'existe plus (supprimée) : sa copie hors-ligne n'a plus de raison d'être.
+            OfflineStore.state.value.collections
+                .filter { it.type == "playlist" && it.name == Likes.NAME }
+                .forEach { Downloads.unpin(context, it.id) }
+            return@LaunchedEffect
+        }
+        if (autoLikes) {
+            try {
+                Downloads.pinPlaylist(context, client, Playlist(id, Likes.NAME))
+            } catch (_: Exception) {
+                // NAS injoignable : ce sera refait au prochain like ou à la prochaine connexion.
+            }
+        }
+    }
+
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
     LaunchedEffect(client) { Likes.sync(client) }
     // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
@@ -334,6 +355,9 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             libraryGenres = browse.genres.map { it.name },
                             onPlayMix = { songs -> player.play(client, songs, 0) },
                             onPlayRadio = { mood -> player.playRadio(mood) },
+                            playerUi = playerUi,
+                            onResume = player::togglePlay,
+                            onOpenAlbum = { album = it },
                             onOpenDownloads = { showDownloads = true },
                             onOpenLiked = ::openLiked,
                             onSettings = { showSettings = true },

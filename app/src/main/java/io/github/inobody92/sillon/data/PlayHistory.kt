@@ -34,6 +34,12 @@ object PlayHistory {
             load(context).filterValues { it >= limit }.keys.toSet()
         }
 
+    /** Identifiants des titres écoutés, du plus récent au plus ancien. */
+    fun recentOrdered(context: Context, limit: Int): List<String> =
+        synchronized(lock) {
+            load(context).entries.sortedByDescending { it.value }.take(limit).map { it.key }
+        }
+
     fun clear(context: Context) = synchronized(lock) {
         cache = mutableMapOf()
         context.applicationContext.deleteFile(FILE)

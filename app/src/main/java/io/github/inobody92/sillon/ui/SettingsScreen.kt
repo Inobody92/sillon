@@ -51,6 +51,7 @@ import io.github.inobody92.sillon.data.ThemeMode
 fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () -> Unit, onLogout: () -> Unit) {
     val theme by AppSettings.theme.collectAsStateWithLifecycle()
     val wifiOnly by AppSettings.downloadWifiOnly.collectAsStateWithLifecycle()
+    val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -161,6 +162,20 @@ fun SettingsScreen(client: SynoClient, onClose: () -> Unit, onOpenDownloads: () 
                             if (offline.pendingCount > 0) Downloads.schedule(context, replace = true)
                         },
                     )
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Télécharger mes titres likés", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Chaque titre liké est téléchargé automatiquement. Désactiver n'efface rien.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = autoLikes, onCheckedChange = { AppSettings.setAutoDownloadLikes(it) })
                 }
                 OutlinedButton(onClick = onOpenDownloads, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text("Gérer les téléchargements · ${formatBytes(offline.bytes)}")

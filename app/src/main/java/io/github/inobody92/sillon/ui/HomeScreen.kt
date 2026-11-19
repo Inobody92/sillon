@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,16 +67,23 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
+import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.DailyMix
+import io.github.inobody92.sillon.data.LibraryIndex
+import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
+import io.github.inobody92.sillon.playback.PlayerUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -85,6 +93,8 @@ data class HomeState(
     val mix: List<Song> = emptyList(),
     val loading: Boolean = true,
     val error: String? = null,
+    val added: List<Album> = emptyList(),
+    val played: List<Album> = emptyList(),
 )
 
 class HomeViewModel(app: Application, private val client: SynoClient) : AndroidViewModel(app) {
@@ -94,17 +104,42 @@ class HomeViewModel(app: Application, private val client: SynoClient) : AndroidV
 
     init {
         load(regenerate = false)
+        loadAdded()
+        // L'index de recherche sert à retrouver l'album de chaque titre écouté : on recalcule quand il est prêt.
+        viewModelScope.launch {
+            LibraryIndex.state.map { it.ready }.distinctUntilChanged().collect { refreshPlayed() }
+        }
     }
 
     fun load(regenerate: Boolean) {
-        _state.value = _state.value.copy(loading = true, error = null)
+        _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            _state.value = try {
-                HomeState(mix = DailyMix.get(getApplication(), client, regenerate), loading = false)
+            try {
+                val mix = DailyMix.get(getApplication(), client, regenerate)
+                _state.update { it.copy(mix = mix, loading = false) }
             } catch (e: Exception) {
-                _state.value.copy(loading = false, error = e.message ?: "Impossible de préparer le mix")
+                _state.update { it.copy(loading = false, error = e.message ?: "Impossible de préparer le mix") }
             }
         }
+    }
+
+    /** Derniers albums ajoutés à la bibliothèque (tri par date d'ajout côté NAS). */
+    private fun loadAdded() {
+        viewModelScope.launch {
+            runCatching { client.albums(0, 15, sortBy = "time", sortDirection = "desc") }
+                .onSuccess { albums -> _state.update { it.copy(added = albums) } }
+        }
+    }
+
+    /** Albums des derniers titres écoutés, du plus récent au plus ancien, sans doublon. */
+    fun refreshPlayed() {
+        val ids = PlayHistory.recentOrdered(getApplication(), 60)
+        val songs = LibraryIndex.songsByIds(ids)
+        val albums = songs.filter { it.album.isNotBlank() }
+            .distinctBy { it.album to it.albumArtist.ifBlank { it.artist } }
+            .take(12)
+            .map { Album(it.album, it.albumArtist, it.artist, it.year) }
+        _state.update { it.copy(played = albums) }
     }
 }
 
@@ -117,10 +152,15 @@ fun HomeScreen(
     libraryGenres: List<String>,
     onPlayMix: (List<Song>) -> Unit,
     onPlayRadio: (Mood) -> Unit,
+    playerUi: PlayerUi,
+    onResume: () -> Unit,
+    onOpenAlbum: (Album) -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenLiked: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    // L'historique change à chaque écoute : on le relit à chaque retour sur l'accueil.
+    LaunchedEffect(Unit) { vm.refreshPlayed() }
     val offline by OfflineStore.state.collectAsStateWithLifecycle()
     val likes by Likes.state.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -141,6 +181,27 @@ fun HomeScreen(
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
+            if (playerUi.hasItem && !playerUi.isPlaying) {
+                item(key = "resume") {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable(onClick = onResume),
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                Text("Reprendre", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    listOf(playerUi.title, playerUi.artist).filter { it.isNotBlank() }.joinToString(" · "),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             item(key = "mix") {
                 MixCard(state, client, imageLoader, onPlay = { onPlayMix(state.mix) }, onRegenerate = { vm.load(true) }, onRetry = { vm.load(false) })
             }
@@ -187,6 +248,12 @@ fun HomeScreen(
                     }
                 }
             }
+            if (state.played.isNotEmpty()) {
+                item(key = "played") { AlbumRow("Écoutés récemment", state.played, client, imageLoader, onOpenAlbum) }
+            }
+            if (state.added.isNotEmpty()) {
+                item(key = "added") { AlbumRow("Ajoutés récemment", state.added, client, imageLoader, onOpenAlbum) }
+            }
             item(key = "radio-title") {
                 Text(
                     "Radio",
@@ -229,6 +296,45 @@ fun HomeScreen(
             onDismiss = { editing = null },
             onSaved = { editing = null; moodVersion++ },
         )
+    }
+}
+
+@Composable
+private fun AlbumRow(
+    title: String,
+    albums: List<Album>,
+    client: SynoClient,
+    imageLoader: ImageLoader,
+    onOpen: (Album) -> Unit,
+) {
+    Column(Modifier.padding(top = 24.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(albums, key = { "${it.albumArtist}/${it.name}" }) { album ->
+                Column(Modifier.width(120.dp).clickable { onOpen(album) }) {
+                    CoverImage(
+                        url = client.coverUrl(album, withSid = true),
+                        imageLoader = imageLoader,
+                        contentDescription = album.name,
+                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(12.dp)),
+                    )
+                    Text(
+                        album.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Text(
+                        album.displayArtist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 

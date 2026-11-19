@@ -148,8 +148,12 @@ class SynoClient(val creds: Credentials) {
         artist: String? = null,
         genre: String? = null,
         filter: String? = null,
+        sortBy: String? = null,
+        sortDirection: String? = null,
     ): List<Album> {
         val params = mutableMapOf("offset" to "$offset", "limit" to "$limit", "library" to "all")
+        sortBy?.let { params["sort_by"] = it }
+        sortDirection?.let { params["sort_direction"] = it }
         artist?.let { params["artist"] = it }
         genre?.let { params["genre"] = it }
         filter?.let { params["filter"] = it }
