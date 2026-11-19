@@ -47,6 +47,8 @@ data class Song(
 
 data class Artist(val name: String)
 
+data class Genre(val name: String)
+
 data class Playlist(val id: String, val name: String) {
     val isShared: Boolean get() = id.contains("shared")
 }
@@ -159,6 +161,17 @@ class SynoClient(val creds: Credentials) {
         val arr = data.optJSONArray("artists") ?: return emptyList()
         return List(arr.length()) { i -> Artist(arr.getJSONObject(i).optString("name")) }
             .filter { it.name.isNotBlank() }
+    }
+
+    suspend fun genres(): List<Genre> {
+        val data = call(
+            "SYNO.AudioStation.Genre", "list",
+            params = mapOf("offset" to "0", "limit" to "-1", "library" to "all"),
+        ).getJSONObject("data")
+        val arr = data.optJSONArray("genres") ?: return emptyList()
+        return List(arr.length()) { i -> Genre(arr.getJSONObject(i).optString("name")) }
+            .filter { it.name.isNotBlank() }
+            .sortedBy { it.name.lowercase() }
     }
 
     /** Titres dont le titre contient [query]. */

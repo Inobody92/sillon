@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -45,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import io.github.inobody92.sillon.data.Album
+import io.github.inobody92.sillon.data.Artist
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.Job
@@ -58,12 +60,13 @@ import kotlinx.coroutines.launch
 
 data class SearchState(
     val query: String = "",
+    val artists: List<Artist> = emptyList(),
     val albums: List<Album> = emptyList(),
     val songs: List<Song> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
 ) {
-    val hasResults get() = albums.isNotEmpty() || songs.isNotEmpty()
+    val hasResults get() = artists.isNotEmpty() || albums.isNotEmpty() || songs.isNotEmpty()
 }
 
 class SearchViewModel(private val client: SynoClient) : ViewModel() {
@@ -87,12 +90,18 @@ class SearchViewModel(private val client: SynoClient) : ViewModel() {
             val q = query.trim()
             try {
                 // Les deux requêtes sont lancées en parallèle.
-                val (albums, songs) = coroutineScope {
+                val results = coroutineScope {
+                    val ar = async { client.artists(0, MAX_ARTISTS, filter = q) }
                     val a = async { client.albums(0, MAX_ALBUMS, filter = q) }
                     val t = async { client.searchSongs(q, MAX_SONGS) }
-                    a.await() to t.await()
+                    Triple(ar.await(), a.await(), t.await())
                 }
-                _state.value = _state.value.copy(albums = albums, songs = songs, loading = false)
+                _state.value = _state.value.copy(
+                    artists = results.first,
+                    albums = results.second,
+                    songs = results.third,
+                    loading = false,
+                )
             } catch (e: kotlin.coroutines.cancellation.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -104,6 +113,7 @@ class SearchViewModel(private val client: SynoClient) : ViewModel() {
     private companion object {
         const val MIN_CHARS = 2
         const val DEBOUNCE_MS = 350L
+        const val MAX_ARTISTS = 10
         const val MAX_ALBUMS = 30
         const val MAX_SONGS = 50
     }
@@ -115,6 +125,7 @@ fun SearchScreen(
     client: SynoClient,
     imageLoader: ImageLoader,
     onOpenAlbum: (Album) -> Unit,
+    onOpenArtist: (String) -> Unit,
     onPlaySong: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -129,7 +140,7 @@ fun SearchScreen(
             OutlinedTextField(
                 value = state.query,
                 onValueChange = vm::onQueryChange,
-                placeholder = { Text("Titre, album…") },
+                placeholder = { Text("Artiste, album, titre…") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
@@ -155,6 +166,20 @@ fun SearchScreen(
                         modifier = Modifier.align(Alignment.TopCenter).padding(24.dp),
                     )
                     else -> LazyColumn(Modifier.fillMaxSize()) {
+                        if (state.artists.isNotEmpty()) {
+                            item(key = "h-artists") { SectionTitle("Artistes") }
+                            items(state.artists, key = { "ar/${it.name}" }) { artist ->
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { onOpenArtist(artist.name) }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    Icon(Icons.Filled.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(artist.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                         if (state.albums.isNotEmpty()) {
                             item(key = "h-albums") { SectionTitle("Albums") }
                             items(state.albums, key = { "a/${it.albumArtist}/${it.name}" }) { album ->

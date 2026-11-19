@@ -14,10 +14,15 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -46,11 +51,16 @@ fun AlbumsScreen(
     client: SynoClient,
     imageLoader: ImageLoader,
     onOpenAlbum: (Album) -> Unit,
-    onLogout: () -> Unit,
+    title: String = "Albums",
+    artist: String? = null,
+    genre: String? = null,
+    onBack: (() -> Unit)? = null,
+    onLogout: (() -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val vm: AlbumsViewModel = viewModel(
-        key = client.creds.url + client.creds.account,
-        factory = viewModelFactory { initializer { AlbumsViewModel(client) } },
+        key = "albums/${client.creds.url}/${client.creds.account}/$artist/$genre",
+        factory = viewModelFactory { initializer { AlbumsViewModel(client, artist, genre) } },
     )
     val state by vm.state.collectAsStateWithLifecycle()
 
@@ -58,8 +68,17 @@ fun AlbumsScreen(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
-                title = { Text("Albums") },
-                actions = { TextButton(onClick = onLogout) { Text("Déconnexion") } },
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                        }
+                    }
+                },
+                actions = {
+                    if (onLogout != null) TextButton(onClick = onLogout) { Text("Déconnexion") }
+                },
             )
         },
     ) { padding ->
@@ -81,6 +100,9 @@ fun AlbumsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (header != null) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "header") { header() }
+                    }
                     itemsIndexed(state.albums, key = { i, a -> "$i/${a.name}/${a.albumArtist}" }) { index, album ->
                         if (index >= state.albums.size - 12) {
                             LaunchedEffect(state.albums.size) { vm.loadMore() }

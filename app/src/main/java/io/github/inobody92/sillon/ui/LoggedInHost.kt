@@ -7,7 +7,11 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -16,7 +20,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -79,6 +88,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
+    var artist by rememberSaveable { mutableStateOf<String?>(null) }
+    var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var addTarget by remember { mutableStateOf<List<String>?>(null) }
 
     val playlistsVm: PlaylistsViewModel = viewModel(
@@ -100,6 +111,10 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         }
     }
 
+    val browseVm: BrowseViewModel = viewModel(
+        key = "browse/${client.creds.url}/${client.creds.account}",
+        factory = viewModelFactory { initializer { BrowseViewModel(client) } },
+    )
     val searchVm: SearchViewModel = viewModel(
         key = "search/${client.creds.url}/${client.creds.account}",
         factory = viewModelFactory { initializer { SearchViewModel(client) } },
@@ -108,9 +123,34 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
     BackHandler(enabled = showQueue) { showQueue = false }
     BackHandler(enabled = nowPlaying && !showQueue) { nowPlaying = false }
-    BackHandler(enabled = !nowPlaying && (album != null || playlist != null)) {
+    BackHandler(enabled = !nowPlaying && album != null) { album = null }
+    BackHandler(enabled = !nowPlaying && album == null && playlist != null) { playlist = null }
+    BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist != null) { artist = null }
+    BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist == null && genre != null) {
+        genre = null
+    }
+
+    /** Lance tous les titres d'un artiste (chargés à la demande). */
+    fun playArtist(name: String, shuffle: Boolean) {
+        scope.launch {
+            try {
+                val songs = client.songsByArtist(name)
+                if (songs.isEmpty()) {
+                    showMessage("Aucun titre pour $name")
+                } else {
+                    player.play(client, if (shuffle) songs.shuffled() else songs, 0)
+                }
+            } catch (e: Exception) {
+                showMessage(e.message ?: "Impossible de charger les titres")
+            }
+        }
+    }
+
+    fun resetNavigation() {
         album = null
         playlist = null
+        artist = null
+        genre = null
     }
 
     fun queueMessage(count: Int, where: String) =
@@ -155,13 +195,52 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             queueMessage(1, "ajouté à la file")
                         },
                     )
+                    artist != null -> {
+                        val name = artist!!
+                        AlbumsScreen(
+                            client, imageLoader,
+                            onOpenAlbum = { album = it },
+                            title = name,
+                            artist = name,
+                            onBack = { artist = null },
+                            header = {
+                                Row(
+                                    Modifier.padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Button(onClick = { playArtist(name, shuffle = false) }) {
+                                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Lecture")
+                                    }
+                                    OutlinedButton(onClick = { playArtist(name, shuffle = true) }) {
+                                        Icon(Icons.Filled.Shuffle, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Aléatoire")
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    genre != null -> {
+                        val name = genre!!
+                        AlbumsScreen(
+                            client, imageLoader,
+                            onOpenAlbum = { album = it },
+                            title = name,
+                            genre = name,
+                            onBack = { genre = null },
+                        )
+                    }
                     tab == 0 -> AlbumsScreen(client, imageLoader, onOpenAlbum = { album = it }, onLogout = onLogout)
-                    tab == 1 -> PlaylistsScreen(playlistsVm, onOpen = { playlist = it }, onMessage = showMessage)
+                    tab == 1 -> BrowseScreen(browseVm, onOpenArtist = { artist = it }, onOpenGenre = { genre = it })
+                    tab == 2 -> PlaylistsScreen(playlistsVm, onOpen = { playlist = it }, onMessage = showMessage)
                     else -> SearchScreen(
                         vm = searchVm,
                         client = client,
                         imageLoader = imageLoader,
                         onOpenAlbum = { album = it },
+                        onOpenArtist = { artist = it },
                         onPlaySong = { song -> player.play(client, listOf(song), 0) },
                         onPlayNext = { song ->
                             player.playNext(client, listOf(song))
@@ -184,19 +263,25 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                     NavigationBar {
                         NavigationBarItem(
                             selected = tab == 0,
-                            onClick = { tab = 0; album = null; playlist = null },
+                            onClick = { tab = 0; resetNavigation() },
                             icon = { Icon(Icons.Filled.Album, contentDescription = null) },
                             label = { Text("Albums") },
                         )
                         NavigationBarItem(
                             selected = tab == 1,
-                            onClick = { tab = 1; album = null; playlist = null },
+                            onClick = { tab = 1; resetNavigation() },
+                            icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                            label = { Text("Artistes") },
+                        )
+                        NavigationBarItem(
+                            selected = tab == 2,
+                            onClick = { tab = 2; resetNavigation() },
                             icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
                             label = { Text("Playlists") },
                         )
                         NavigationBarItem(
-                            selected = tab == 2,
-                            onClick = { tab = 2; album = null; playlist = null },
+                            selected = tab == 3,
+                            onClick = { tab = 3; resetNavigation() },
                             icon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             label = { Text("Recherche") },
                         )

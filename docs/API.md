@@ -107,3 +107,9 @@ Paramètre `library` : `personal` ou `shared`.
 - Albums : `SYNO.AudioStation.Album` / `list` avec `filter=<texte>` (« contient », insensible à la casse).
 - Artistes : `SYNO.AudioStation.Artist` / `list` (`filter` accepté par l'ancienne app).
 - Album d'un artiste : `Album.list` avec `artist=<nom>` ; genre : `genre=<nom>`.
+
+## Artistes et genres (vérifié, lot 5)
+- Artistes : `SYNO.AudioStation.Artist` / `list` avec `limit=-1` renvoie tous les artistes (`data.artists[].name`). `filter=<texte>` filtre par nom.
+- Genres : `SYNO.AudioStation.Genre` / `list` avec `limit=-1` (`data.genres[].name`).
+- Albums d'un artiste : `Album.list` + `artist=<nom>` ; d'un genre : `Album.list` + `genre=<nom>`.
+- Titres d'un artiste : `Song.list` + `artist=<nom>`.

@@ -17,7 +17,11 @@ data class AlbumsState(
     val error: String? = null,
 )
 
-class AlbumsViewModel(private val client: SynoClient) : ViewModel() {
+class AlbumsViewModel(
+    private val client: SynoClient,
+    private val artist: String? = null,
+    private val genre: String? = null,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(AlbumsState())
     val state: StateFlow<AlbumsState> = _state.asStateFlow()
@@ -32,7 +36,7 @@ class AlbumsViewModel(private val client: SynoClient) : ViewModel() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                val page = client.albums(offset = s.albums.size, limit = PAGE_SIZE)
+                val page = client.albums(offset = s.albums.size, limit = PAGE_SIZE, artist = artist, genre = genre)
                 _state.update {
                     it.copy(
                         albums = it.albums + page,
