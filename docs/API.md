@@ -88,3 +88,16 @@ Paramètre `library` : `personal` ou `shared`.
 - Format précis de chiffrement du mot de passe quand `Encryption` est actif.
 - Endpoint `Song.list` : paramètres de tri/filtre (sort_by, sort_direction, filter).
 - Les versions réelles exposées par TON NAS (`query.cgi?query=all`).
+
+## Playlists : comportements vérifiés (Sillon, lot 3)
+- `updatesongs(id, offset, limit, songs)` **remplace** `limit` morceaux à partir de `offset` par la liste `songs` :
+  - ajouter en fin : `offset = total`, `limit = nombre ajouté`, `songs = ids` ;
+  - retirer la position `i` : `offset = i`, `limit = 1`, `songs = ""` ;
+  - réordonner : `offset = 0`, `limit = total`, `songs = ids dans le nouvel ordre`.
+- `songs` : identifiants séparés par des virgules ; `\` et `,` dans un identifiant sont échappés par `\`.
+- Un même morceau peut figurer plusieurs fois dans une playlist.
+- `getinfo` ne renvoie **pas** de bloc `additional` si on demande seulement `songs_total` : il faut `additional=songs,songs_total`.
+- Contenu complet : `getinfo` avec `additional=songs,songs_song_tag,songs_song_audio`, `songs_offset`, `songs_limit=-1`.
+- `create` accepte `songs=""` (playlist vide). `rename` prend `id` et `new_name`.
+- `list` avec `library=all` renvoie aussi la playlist système `__SYNO_AUDIO_SHARED_SONGS__` (masquée par Sillon).
+- Pochette d'un morceau : `SYNO.AudioStation.Cover` / `getsongcover` / `id=<songId>`.

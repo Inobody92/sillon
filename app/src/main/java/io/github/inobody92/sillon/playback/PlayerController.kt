@@ -58,11 +58,17 @@ class PlayerController(context: Context) {
         )
     }
 
-    /** Lance la lecture de [songs] à partir de l'index [startIndex]. */
-    fun play(client: SynoClient, album: Album, songs: List<Song>, startIndex: Int) {
+    /**
+     * Lance la lecture de [songs] à partir de l'index [startIndex].
+     * Si [album] est fourni, sa pochette sert pour tous les morceaux ; sinon, celle de chaque morceau.
+     */
+    fun play(client: SynoClient, songs: List<Song>, startIndex: Int, album: Album? = null) {
         if (songs.isEmpty()) return
-        val artwork = client.coverUrl(album, withSid = true)?.let(Uri::parse)
-        val items = songs.map { toMediaItem(it, album, artwork) }
+        val albumArtwork = album?.let { client.coverUrl(it, withSid = true) }?.let(Uri::parse)
+        val items = songs.map { song ->
+            val artwork = albumArtwork ?: client.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
+            toMediaItem(song, album, artwork)
+        }
         withController {
             it.setMediaItems(items, startIndex.coerceIn(items.indices), 0L)
             it.prepare()
@@ -103,7 +109,7 @@ class PlayerController(context: Context) {
         )
     }
 
-    private fun toMediaItem(song: Song, album: Album, artwork: Uri?): MediaItem {
+    private fun toMediaItem(song: Song, album: Album?, artwork: Uri?): MediaItem {
         val uri = Uri.Builder()
             .scheme(PlaybackService.SCHEME)
             .authority("song")
@@ -112,9 +118,9 @@ class PlayerController(context: Context) {
             .build()
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
-            .setArtist(song.artist.ifBlank { album.displayArtist })
-            .setAlbumTitle(song.album.ifBlank { album.name })
-            .setAlbumArtist(song.albumArtist.ifBlank { album.displayArtist })
+            .setArtist(song.artist.ifBlank { album?.displayArtist.orEmpty() })
+            .setAlbumTitle(song.album.ifBlank { album?.name.orEmpty() })
+            .setAlbumArtist(song.albumArtist.ifBlank { album?.displayArtist.orEmpty() })
             .setTrackNumber(song.track.takeIf { it > 0 })
             .setDurationMs(song.durationSec.takeIf { it > 0 }?.let { it * 1000L })
             .setArtworkUri(artwork)

@@ -21,19 +21,27 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,7 +95,8 @@ fun AlbumDetailScreen(
     album: Album,
     imageLoader: ImageLoader,
     onBack: () -> Unit,
-    onPlay: (songs: List<io.github.inobody92.sillon.data.Song>, startIndex: Int) -> Unit,
+    onPlay: (songs: List<Song>, startIndex: Int) -> Unit,
+    onAddToPlaylist: (List<Song>) -> Unit,
 ) {
     val vm: AlbumDetailViewModel = viewModel(
         key = "album/${album.albumArtist}/${album.name}",
@@ -111,7 +120,12 @@ fun AlbumDetailScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(Modifier.fillMaxSize()) {
                 item {
-                    Header(album, client, imageLoader, canPlay = state.songs.isNotEmpty()) { onPlay(state.songs, 0) }
+                    Header(
+                        album, client, imageLoader,
+                        canPlay = state.songs.isNotEmpty(),
+                        onPlay = { onPlay(state.songs, 0) },
+                        onAddAll = { onAddToPlaylist(state.songs) },
+                    )
                 }
                 if (state.loading) {
                     item {
@@ -129,7 +143,12 @@ fun AlbumDetailScreen(
                     }
                 }
                 itemsIndexed(state.songs, key = { _, s -> s.id }) { index, song ->
-                    SongRow(song, showDisc = state.songs.any { it.disc > 1 }) { onPlay(state.songs, index) }
+                    SongRow(
+                        song,
+                        showDisc = state.songs.any { it.disc > 1 },
+                        onClick = { onPlay(state.songs, index) },
+                        onAdd = { onAddToPlaylist(listOf(song)) },
+                    )
                 }
             }
         }
@@ -143,6 +162,7 @@ private fun Header(
     imageLoader: ImageLoader,
     canPlay: Boolean,
     onPlay: () -> Unit,
+    onAddAll: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -170,18 +190,26 @@ private fun Header(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onPlay, enabled = canPlay) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Lecture")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onPlay, enabled = canPlay) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Lecture")
+            }
+            OutlinedButton(onClick = onAddAll, enabled = canPlay) {
+                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Playlist")
+            }
         }
     }
 }
 
 @Composable
-private fun SongRow(song: Song, showDisc: Boolean, onClick: () -> Unit) {
+private fun SongRow(song: Song, showDisc: Boolean, onClick: () -> Unit, onAdd: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -208,6 +236,12 @@ private fun SongRow(song: Song, showDisc: Boolean, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Options") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Ajouter à une playlist") }, onClick = { menu = false; onAdd() })
+            }
+        }
     }
 }
 

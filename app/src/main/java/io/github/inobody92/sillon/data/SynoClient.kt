@@ -45,10 +45,33 @@ data class Song(
     val ext: String,
 )
 
+data class Playlist(val id: String, val name: String) {
+    val isShared: Boolean get() = id.contains("shared")
+}
+
 /** Session active, partagée avec le service de lecture (qui vit hors de l'interface). */
 object SessionHolder {
     @Volatile
     var client: SynoClient? = null
+
+    /**
+     * Rétablit la session depuis les identifiants enregistrés. Sert au service de lecture quand
+     * Android a tué l'application : il peut alors reprendre sans que l'interface soit ouverte.
+     * Bloquant : à appeler depuis un thread de chargement, jamais depuis le thread principal.
+     */
+    @Synchronized
+    fun restore(context: android.content.Context): SynoClient? {
+        client?.let { return it }
+        val creds = SecureStore(context).load() ?: return null
+        val restored = SynoClient(creds)
+        return try {
+            kotlinx.coroutines.runBlocking { restored.connect() }
+            client = restored
+            restored
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
 
 /**
@@ -131,23 +154,136 @@ class SynoClient(val creds: Credentials) {
         if (album.albumArtist.isNotBlank()) params["album_artist"] = album.albumArtist
         val data = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data")
         val arr = data.optJSONArray("songs") ?: return emptyList()
+        return List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }
+            .sortedWith(compareBy({ it.disc }, { it.track }, { it.title }))
+    }
+
+    // --- playlists -----------------------------------------------------------------------
+
+    suspend fun playlists(): List<Playlist> {
+        val data = call(
+            PLAYLIST, "list",
+            params = mapOf("offset" to "0", "limit" to "-1", "library" to "all"),
+        ).getJSONObject("data")
+        val arr = data.optJSONArray("playlists") ?: return emptyList()
         return List(arr.length()) { i ->
             val o = arr.getJSONObject(i)
-            val tag = o.optJSONObject("additional")?.optJSONObject("song_tag")
-            val audio = o.optJSONObject("additional")?.optJSONObject("song_audio")
-            Song(
-                id = o.getString("id"),
-                title = o.optString("title"),
-                artist = tag?.optString("artist").orEmpty(),
-                album = tag?.optString("album").orEmpty(),
-                albumArtist = tag?.optString("album_artist").orEmpty(),
-                track = tag?.optInt("track") ?: 0,
-                disc = tag?.optInt("disc", 1) ?: 1,
-                durationSec = audio?.optInt("duration") ?: 0,
-                ext = o.optString("path").substringAfterLast('.', "").lowercase(),
-            )
-        }.sortedWith(compareBy({ it.disc }, { it.track }, { it.title }))
+            Playlist(o.getString("id"), o.optString("name"))
+        }
+            .filterNot { it.id.contains("__SYNO_") } // playlists système, non éditables
+            .sortedBy { it.name.lowercase() }
     }
+
+    suspend fun playlistSongs(id: String): List<Song> {
+        val data = call(
+            PLAYLIST, "getinfo",
+            params = mapOf(
+                "id" to id,
+                "library" to libraryOf(id),
+                "songs_offset" to "0",
+                "songs_limit" to "-1",
+                "additional" to "songs,songs_song_tag,songs_song_audio",
+            ),
+        ).getJSONObject("data")
+        val songs = data.optJSONArray("playlists")?.optJSONObject(0)
+            ?.optJSONObject("additional")?.optJSONArray("songs") ?: return emptyList()
+        return List(songs.length()) { i -> parseSong(songs.getJSONObject(i)) }
+    }
+
+    /** Crée une playlist personnelle, éventuellement pré-remplie. Renvoie son identifiant. */
+    suspend fun createPlaylist(name: String, songIds: List<String>): String =
+        call(
+            PLAYLIST, "create",
+            params = mapOf("name" to name, "library" to "personal", "songs" to joinIds(songIds)),
+        ).getJSONObject("data").getString("id")
+
+    suspend fun renamePlaylist(id: String, newName: String) {
+        call(PLAYLIST, "rename", params = mapOf("id" to id, "new_name" to newName))
+    }
+
+    suspend fun deletePlaylist(id: String) {
+        call(PLAYLIST, "delete", params = mapOf("id" to id))
+    }
+
+    /** Ajoute des morceaux en fin de playlist. */
+    suspend fun addToPlaylist(id: String, songIds: List<String>) {
+        if (songIds.isEmpty()) return
+        // Le NAS ne renvoie `songs_total` que si on demande aussi `songs` (vérifié sur DSM).
+        val additional = call(
+            PLAYLIST, "getinfo",
+            params = mapOf(
+                "id" to id,
+                "library" to libraryOf(id),
+                "additional" to "songs,songs_total",
+                "songs_offset" to "0",
+                "songs_limit" to "1",
+            ),
+        ).getJSONObject("data").optJSONArray("playlists")?.optJSONObject(0)?.optJSONObject("additional")
+        val total = additional?.optInt("songs_total", -1)?.takeIf { it >= 0 }
+            ?: playlistSongs(id).size
+        updateSongs(id, offset = total, limit = songIds.size, songIds = songIds)
+    }
+
+    /** Retire le morceau à la position [index]. */
+    suspend fun removeFromPlaylist(id: String, index: Int) {
+        updateSongs(id, offset = index, limit = 1, songIds = emptyList())
+    }
+
+    /** Réécrit toute la playlist dans l'ordre donné. */
+    suspend fun reorderPlaylist(id: String, orderedIds: List<String>) {
+        updateSongs(id, offset = 0, limit = orderedIds.size, songIds = orderedIds)
+    }
+
+    /** `updatesongs` remplace [limit] morceaux à partir de [offset] par [songIds]. */
+    private suspend fun updateSongs(id: String, offset: Int, limit: Int, songIds: List<String>) {
+        call(
+            PLAYLIST, "updatesongs",
+            params = mapOf(
+                "id" to id,
+                "offset" to "$offset",
+                "limit" to "$limit",
+                "songs" to joinIds(songIds),
+            ),
+        )
+    }
+
+    private fun libraryOf(id: String) = if (id.contains("shared")) "shared" else "personal"
+
+    /** Les identifiants sont séparés par des virgules : `\` et `,` doivent être échappés. */
+    private fun joinIds(ids: List<String>) =
+        ids.joinToString(",") { it.replace("\\", "\\\\").replace(",", "\\,") }
+
+    private fun parseSong(o: JSONObject): Song {
+        val additional = o.optJSONObject("additional")
+        val tag = additional?.optJSONObject("song_tag")
+        val audio = additional?.optJSONObject("song_audio")
+        return Song(
+            id = o.getString("id"),
+            title = o.optString("title"),
+            artist = tag?.optString("artist").orEmpty(),
+            album = tag?.optString("album").orEmpty(),
+            albumArtist = tag?.optString("album_artist").orEmpty(),
+            track = tag?.optInt("track") ?: 0,
+            disc = tag?.optInt("disc", 1) ?: 1,
+            durationSec = audio?.optInt("duration") ?: 0,
+            ext = o.optString("path").substringAfterLast('.', "").lowercase(),
+        )
+    }
+
+    /** Pochette d'un morceau (utile hors contexte d'album, par exemple dans une playlist). */
+    fun songCoverUrl(songId: String, withSid: Boolean): String? {
+        val info = apis["SYNO.AudioStation.Cover"] ?: return null
+        val builder = webapiUrl(info.path).newBuilder()
+            .addQueryParameter("api", "SYNO.AudioStation.Cover")
+            .addQueryParameter("method", "getsongcover")
+            .addQueryParameter("version", "1")
+            .addQueryParameter("id", songId)
+        if (withSid) sid?.let { builder.addQueryParameter("_sid", it) }
+        return builder.build().toString()
+    }
+
+    /** Se reconnecte avec les identifiants de la session (sid expiré). */
+    suspend fun refreshSession() = withContext(Dispatchers.IO) { login(null) }
 
     /** URL de lecture directe d'un morceau, avec le sid courant. */
     fun streamUrl(songId: String, ext: String): String? {
@@ -252,6 +388,7 @@ class SynoClient(val creds: Credentials) {
     private fun errorCode(json: JSONObject): Int = json.optJSONObject("error")?.optInt("code", -1) ?: -1
 
     companion object {
+        private const val PLAYLIST = "SYNO.AudioStation.Playlist"
         private val SESSION_ERRORS = setOf(106, 107, 119)
         private const val ERROR_OTP_REQUIRED = 403
 
