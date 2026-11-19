@@ -2,6 +2,7 @@ package io.github.inobody92.sillon.data
 
 import android.content.Context
 import org.json.JSONArray
+import org.json.JSONObject
 import java.time.LocalDate
 import kotlin.random.Random
 
@@ -24,10 +25,9 @@ object DailyMix {
         val owner = client.creds.url + "|" + client.creds.account
 
         if (!regenerate && prefs.getString("owner", null) == owner && prefs.getString("date", null) == today) {
-            val saved = prefs.getString("ids", null)
+            val saved = prefs.getString("songs", null)
             if (saved != null) {
-                val ids = JSONArray(saved).let { arr -> List(arr.length()) { arr.getString(it) } }
-                val songs = runCatching { client.songsByIds(ids) }.getOrDefault(emptyList())
+                val songs = runCatching { fromJson(saved) }.getOrDefault(emptyList())
                 if (songs.isNotEmpty()) return songs
             }
         }
@@ -42,9 +42,35 @@ object DailyMix {
             prefs.edit()
                 .putString("owner", owner)
                 .putString("date", today)
-                .putString("ids", JSONArray(chosen.map { it.id }).toString())
+                .putString("songs", toJson(chosen))
+                .remove("ids")
                 .apply()
         }
         return chosen
+    }
+
+    // Les titres sont mémorisés en entier : relire le mix ne demande aucun appel au NAS.
+    private fun toJson(songs: List<Song>): String = JSONArray().apply {
+        songs.forEach { s ->
+            put(
+                JSONObject()
+                    .put("id", s.id).put("title", s.title).put("artist", s.artist).put("album", s.album)
+                    .put("albumArtist", s.albumArtist).put("track", s.track).put("disc", s.disc)
+                    .put("duration", s.durationSec).put("ext", s.ext),
+            )
+        }
+    }.toString()
+
+    private fun fromJson(json: String): List<Song> {
+        val arr = JSONArray(json)
+        return List(arr.length()) { i ->
+            val o = arr.getJSONObject(i)
+            Song(
+                id = o.getString("id"), title = o.optString("title"), artist = o.optString("artist"),
+                album = o.optString("album"), albumArtist = o.optString("albumArtist"),
+                track = o.optInt("track"), disc = o.optInt("disc", 1),
+                durationSec = o.optInt("duration"), ext = o.optString("ext"),
+            )
+        }
     }
 }

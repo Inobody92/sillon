@@ -2,6 +2,7 @@ package io.github.inobody92.sillon.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -238,20 +239,23 @@ class SynoClient(val creds: Credentials) {
                 .shuffled(random)
         }
 
-    /** Retrouve des titres à partir de leurs identifiants (dans l'ordre demandé). */
-    suspend fun songsByIds(ids: List<String>): List<Song> {
-        if (ids.isEmpty()) return emptyList()
-        val data = call(
-            "SYNO.AudioStation.Song", "getinfo",
-            params = mapOf(
-                "id" to ids.joinToString(",") { it.replace("\\", "\\\\").replace(",", "\\,") },
-                "library" to "all",
-                "additional" to "song_tag,song_audio",
-            ),
-        ).getJSONObject("data")
-        val arr = data.optJSONArray("songs") ?: return emptyList()
-        val byId = List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }.associateBy { it.id }
-        return ids.mapNotNull { byId[it] }
+    /**
+     * Retrouve des titres à partir de leurs identifiants (dans l'ordre demandé).
+     * `Song.getinfo` ne renvoie qu'un titre même si on lui en passe plusieurs (vérifié sur DSM) :
+     * on interroge donc chaque identifiant séparément, en parallèle.
+     */
+    suspend fun songsByIds(ids: List<String>): List<Song> = coroutineScope {
+        ids.map { id ->
+            async {
+                runCatching {
+                    val data = call(
+                        "SYNO.AudioStation.Song", "getinfo",
+                        params = mapOf("id" to id, "library" to "all", "additional" to "song_tag,song_audio"),
+                    ).getJSONObject("data")
+                    data.optJSONArray("songs")?.optJSONObject(0)?.let { parseSong(it) }
+                }.getOrNull()
+            }
+        }.mapNotNull { it.await() }
     }
 
     /** Titres dont le titre contient [query]. */

@@ -118,3 +118,8 @@ Paramètre `library` : `personal` ou `shared`.
 - `SYNO.AudioStation.Info` / `getinfo` renvoie `data.transcode` : liste des formats de conversion proposés par le NAS (`mp3`, `wav`). L'ancienne app s'y fie avant de proposer une qualité.
 - Conversion : `SYNO.AudioStation.Stream` / `transcode` avec `format=mp3`, `bitrate=<bits/s>` (320000, 192000, 128000) et `ext=.mp3`.
 - Si le NAS ne propose pas la conversion demandée, il répond **HTTP 415** : ne pas la demander, lire l'original (`method=stream`).
+
+## Retrouver des titres par identifiant (vérifié, lot 7)
+- `SYNO.AudioStation.Song` / `getinfo` avec `id=<un seul identifiant>` renvoie le titre. Passer plusieurs identifiants séparés
+  par des virgules ne renvoie **que le premier** : faire un appel par titre.
+- `Song.list` renvoie `data.total` (nombre de titres, ou de titres du genre filtré) : base du tirage aléatoire par positions.

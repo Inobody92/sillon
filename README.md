@@ -24,9 +24,9 @@ Lots 1 à 5 : connexion au NAS (OTP, device de confiance), albums avec pochettes
 - [x] Réglages : mode sombre (système / clair / sombre), choix de la qualité audio Wi-Fi / mobile (si le NAS sait convertir en MP3)
 - [x] Filtre par genre sur la grille d'albums
 - [x] Accueil : mix du jour (stable dans la journée, orienté vers les titres peu écoutés) et radios par humeur sans fin (genres modifiables)
-- [ ] Android Auto
+- [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée.
 - [ ] Hors-ligne
-- [ ] Android Auto, paroles, édition des tags
+- [x] Android Auto : navigation (radio, albums, artistes, playlists), lecture, file d'attente. La recherche vocale n'est pas encore vérifiée., paroles, édition des tags
 
 ## Compiler
 

@@ -28,6 +28,14 @@ import kotlin.random.Random
  */
 class LibraryTree(private val context: Context) {
 
+    /**
+     * Dossier d'où vient chaque titre affiché. Android Auto renvoie seulement l'identifiant du titre choisi
+     * (les métadonnées ne reviennent pas) : c'est ce qui permet de continuer l'album ou la playlist.
+     */
+    private val parents = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    fun parentOf(songId: String): String? = parents[songId]
+
     suspend fun client(): SynoClient? =
         SessionHolder.client ?: withContext(Dispatchers.IO) { SessionHolder.restore(context) }
 
@@ -36,7 +44,7 @@ class LibraryTree(private val context: Context) {
     suspend fun item(mediaId: String): MediaItem? = when {
         mediaId == ROOT -> rootItem()
         mediaId == MIX -> mixItem()
-        mediaId == RADIO -> MediaItems.folder(RADIO, "Radio", "Selon l'humeur")
+        mediaId == RADIO -> MediaItems.folder(RADIO, "Radio", "Mix du jour et humeurs")
         mediaId.startsWith("radio:") -> Mood.entries.firstOrNull { it.id == mediaId.removePrefix("radio:") }?.let(::moodItem)
         mediaId == ALBUMS -> MediaItems.folder(ALBUMS, "Albums")
         mediaId == ARTISTS -> MediaItems.folder(ARTISTS, "Artistes")
@@ -50,13 +58,12 @@ class LibraryTree(private val context: Context) {
         val size = pageSize.coerceIn(1, 100)
         return when {
             parentId == ROOT -> listOf(
-                mixItem(),
-                MediaItems.folder(RADIO, "Radio", "Selon l'humeur"),
+                MediaItems.folder(RADIO, "Radio", "Mix du jour et humeurs"),
                 MediaItems.folder(ALBUMS, "Albums"),
                 MediaItems.folder(ARTISTS, "Artistes"),
                 MediaItems.folder(PLAYLISTS, "Playlists"),
             )
-            parentId == RADIO -> Mood.entries.map(::moodItem)
+            parentId == RADIO -> listOf(mixItem()) + Mood.entries.map(::moodItem)
             parentId == ALBUMS -> c.albums(page * size, size).map { albumItem(it) }
             parentId == ARTISTS -> c.artists(page * size, size).map {
                 MediaItems.folder("artist:${Uri.encode(it.name)}", it.name, type = MediaMetadata.MEDIA_TYPE_ARTIST)
@@ -68,10 +75,13 @@ class LibraryTree(private val context: Context) {
                 c.albums(page * size, size, artist = Uri.decode(parentId.removePrefix("artist:"))).map { albumItem(it) }
             parentId.startsWith("album:") -> {
                 val album = decodeAlbum(parentId) ?: return emptyList()
-                c.songs(album).map { songItem(it, album, parentId) }
+                c.songs(album).also { songs -> songs.forEach { parents[it.id] = parentId } }
+                    .map { songItem(it, album, parentId) }
             }
             parentId.startsWith("playlist:") ->
-                c.playlistSongs(Uri.decode(parentId.removePrefix("playlist:"))).map { songItem(it, null, parentId) }
+                c.playlistSongs(Uri.decode(parentId.removePrefix("playlist:")))
+                    .also { songs -> songs.forEach { parents[it.id] = parentId } }
+                    .map { songItem(it, null, parentId) }
             else -> emptyList()
         }
     }

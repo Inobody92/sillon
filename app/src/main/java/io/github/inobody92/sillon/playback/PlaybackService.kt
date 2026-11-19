@@ -231,7 +231,7 @@ class PlaybackService : MediaLibraryService() {
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
             val single = mediaItems.singleOrNull()
-            val parent = single?.mediaMetadata?.extras?.getString(MediaItems.EXTRA_PARENT)
+            val parent = single?.let { it.mediaMetadata.extras?.getString(MediaItems.EXTRA_PARENT) ?: tree.parentOf(it.mediaId) }
             if (single != null && parent != null) {
                 // Un titre choisi dans un album ou une playlist (depuis la voiture) : on joue tout le contenu à partir de lui.
                 val siblings = runCatching { tree.expand(parent) }.getOrNull().orEmpty()
