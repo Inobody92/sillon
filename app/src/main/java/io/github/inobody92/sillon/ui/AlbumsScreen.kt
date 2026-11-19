@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,7 +56,7 @@ fun AlbumsScreen(
     artist: String? = null,
     genre: String? = null,
     onBack: (() -> Unit)? = null,
-    onLogout: (() -> Unit)? = null,
+    onSettings: (() -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
 ) {
     val vm: AlbumsViewModel = viewModel(
@@ -77,7 +78,11 @@ fun AlbumsScreen(
                     }
                 },
                 actions = {
-                    if (onLogout != null) TextButton(onClick = onLogout) { Text("Déconnexion") }
+                    if (onSettings != null) {
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Réglages")
+                        }
+                    }
                 },
             )
         },

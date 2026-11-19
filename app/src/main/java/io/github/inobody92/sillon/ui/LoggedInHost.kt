@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
@@ -88,6 +89,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var albumsGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var artist by rememberSaveable { mutableStateOf<String?>(null) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var addTarget by remember { mutableStateOf<List<String>?>(null) }
@@ -121,8 +124,9 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     )
 
     // Retour : file d'attente, puis lecteur plein écran, puis écran de détail.
+    BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showQueue) { showQueue = false }
-    BackHandler(enabled = nowPlaying && !showQueue) { nowPlaying = false }
+    BackHandler(enabled = nowPlaying && !showQueue && !showSettings) { nowPlaying = false }
     BackHandler(enabled = !nowPlaying && album != null) { album = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist != null) { playlist = null }
     BackHandler(enabled = !nowPlaying && album == null && playlist == null && artist != null) { artist = null }
@@ -232,7 +236,24 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             onBack = { genre = null },
                         )
                     }
-                    tab == 0 -> AlbumsScreen(client, imageLoader, onOpenAlbum = { album = it }, onLogout = onLogout)
+                    tab == 0 -> {
+                        val browse by browseVm.state.collectAsStateWithLifecycle()
+                        AlbumsScreen(
+                            client, imageLoader,
+                            onOpenAlbum = { album = it },
+                            genre = albumsGenre,
+                            onSettings = { showSettings = true },
+                            header = if (browse.genres.isEmpty()) null else {
+                                {
+                                    GenreChips(
+                                        genres = browse.genres.map { it.name },
+                                        selected = albumsGenre,
+                                        onSelect = { albumsGenre = it },
+                                    )
+                                }
+                            },
+                        )
+                    }
                     tab == 1 -> BrowseScreen(browseVm, onOpenArtist = { artist = it }, onOpenGenre = { genre = it })
                     tab == 2 -> PlaylistsScreen(playlistsVm, onOpen = { playlist = it }, onMessage = showMessage)
                     else -> SearchScreen(
@@ -297,6 +318,13 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 onAddToPlaylist = { mediaId -> addTarget = listOf(mediaId) },
             )
         }
+        if (showSettings) {
+            SettingsScreen(
+                client = client,
+                onClose = { showSettings = false },
+                onLogout = { showSettings = false; onLogout() },
+            )
+        }
         if (showQueue && playerUi.hasItem) {
             QueueScreen(playerUi, player, imageLoader, onClose = { showQueue = false })
         }
@@ -313,5 +341,30 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             snackbar,
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 8.dp),
         )
+    }
+}
+
+/** Rangée de puces pour filtrer la grille d'albums par genre ; « Tous » retire le filtre. */
+@Composable
+private fun GenreChips(genres: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    androidx.compose.foundation.lazy.LazyRow(
+        Modifier.padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(key = "all") {
+            androidx.compose.material3.FilterChip(
+                selected = selected == null,
+                onClick = { onSelect(null) },
+                label = { Text("Tous") },
+            )
+        }
+        items(genres.size, key = { genres[it] }) { i ->
+            val name = genres[i]
+            androidx.compose.material3.FilterChip(
+                selected = selected == name,
+                onClick = { onSelect(if (selected == name) null else name) },
+                label = { Text(name) },
+            )
+        }
     }
 }

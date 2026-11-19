@@ -97,9 +97,17 @@ class SynoClient(val creds: Credentials) {
     var deviceId: String? = creds.deviceId
         private set
 
+    /** Formats vers lesquels le NAS sait convertir à la volée (`mp3`, `wav`), d'après `Info`. */
+    @Volatile
+    var transcodeFormats: Set<String> = emptySet()
+        private set
+
+    val canTranscodeMp3: Boolean get() = "mp3" in transcodeFormats
+
     suspend fun connect(otp: String? = null) = withContext(Dispatchers.IO) {
         discover()
         login(otp)
+        loadCapabilities()
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
@@ -349,18 +357,27 @@ class SynoClient(val creds: Credentials) {
     /** Se reconnecte avec les identifiants de la session (sid expiré). */
     suspend fun refreshSession() = withContext(Dispatchers.IO) { login(null) }
 
-    /** URL de lecture directe d'un morceau, avec le sid courant. */
-    fun streamUrl(songId: String, ext: String): String? {
+    /**
+     * URL de lecture d'un morceau, avec le sid courant. En qualité « originale » le fichier est servi tel quel ;
+     * sinon le NAS le convertit en MP3 au débit demandé.
+     */
+    fun streamUrl(songId: String, ext: String, quality: AudioQuality = AudioQuality.ORIGINAL): String? {
         val info = apis["SYNO.AudioStation.Stream"] ?: return null
-        return webapiUrl(info.path).newBuilder()
+        val builder = webapiUrl(info.path).newBuilder()
             .addQueryParameter("api", "SYNO.AudioStation.Stream")
-            .addQueryParameter("method", "stream")
             .addQueryParameter("version", "1")
             .addQueryParameter("id", songId)
             .addQueryParameter("_sid", sid.orEmpty())
-            .addQueryParameter("ext", ".$ext")
-            .build()
-            .toString()
+        // Sans conversion MP3 disponible sur le NAS, on lit l'original plutôt que d'échouer.
+        if (quality == AudioQuality.ORIGINAL || !canTranscodeMp3) {
+            builder.addQueryParameter("method", "stream").addQueryParameter("ext", ".$ext")
+        } else {
+            builder.addQueryParameter("method", "transcode")
+                .addQueryParameter("format", "mp3")
+                .addQueryParameter("bitrate", quality.bitrateBps.toString())
+                .addQueryParameter("ext", ".mp3")
+        }
+        return builder.build().toString()
     }
 
     /** URL de pochette. Le sid est ajouté à part pour ne pas polluer la clé de cache d'image. */
@@ -377,6 +394,16 @@ class SynoClient(val creds: Credentials) {
     }
 
     // --- interne ---------------------------------------------------------------------------
+
+    /** Au mieux : une erreur ici ne doit jamais empêcher la connexion. */
+    private fun loadCapabilities() {
+        transcodeFormats = try {
+            val arr = post("SYNO.AudioStation.Info", "getinfo").getJSONObject("data").optJSONArray("transcode")
+            if (arr == null) emptySet() else List(arr.length()) { arr.optString(it).lowercase() }.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
 
     private fun webapiUrl(path: String): HttpUrl = "${creds.url}/webapi/$path".toHttpUrl()
 

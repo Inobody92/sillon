@@ -21,6 +21,10 @@ Lots 1 à 5 : connexion au NAS (OTP, device de confiance), albums avec pochettes
 - [x] Playlists : création, ajout depuis un album ou un titre, retrait, réordonnancement par glisser-déposer, renommage, suppression
 - [x] Recherche (albums, titres), file d'attente (lire ensuite, ajouter à la file, réordonner), aléatoire, répétition
 - [x] Navigation par artistes et genres (lecture ou aléatoire d'un artiste entier)
+- [x] Réglages : mode sombre (système / clair / sombre), choix de la qualité audio Wi-Fi / mobile (si le NAS sait convertir en MP3)
+- [x] Filtre par genre sur la grille d'albums
+- [ ] Mix du jour, radio par humeur
+- [ ] Android Auto
 - [ ] Hors-ligne
 - [ ] Android Auto, paroles, édition des tags
 

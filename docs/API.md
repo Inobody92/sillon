@@ -113,3 +113,8 @@ Paramètre `library` : `personal` ou `shared`.
 - Genres : `SYNO.AudioStation.Genre` / `list` avec `limit=-1` (`data.genres[].name`).
 - Albums d'un artiste : `Album.list` + `artist=<nom>` ; d'un genre : `Album.list` + `genre=<nom>`.
 - Titres d'un artiste : `Song.list` + `artist=<nom>`.
+
+## Qualité de lecture et conversion (vérifié, lot 6)
+- `SYNO.AudioStation.Info` / `getinfo` renvoie `data.transcode` : liste des formats de conversion proposés par le NAS (`mp3`, `wav`). L'ancienne app s'y fie avant de proposer une qualité.
+- Conversion : `SYNO.AudioStation.Stream` / `transcode` avec `format=mp3`, `bitrate=<bits/s>` (320000, 192000, 128000) et `ext=.mp3`.
+- Si le NAS ne propose pas la conversion demandée, il répond **HTTP 415** : ne pas la demander, lire l'original (`method=stream`).

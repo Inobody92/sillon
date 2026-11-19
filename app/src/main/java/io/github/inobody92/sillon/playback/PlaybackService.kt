@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.SessionHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        AppSettings.init(applicationContext)
 
         // Réutilise le client HTTP de la session (certificat auto-signé compris).
         val callFactory = Call.Factory { request ->
@@ -54,7 +56,7 @@ class PlaybackService : MediaSessionService() {
                 val client = activeClient() ?: throw IOException("Pas de session Sillon active")
                 val id = spec.uri.getQueryParameter("id") ?: throw IOException("Identifiant de morceau manquant")
                 val ext = spec.uri.lastPathSegment.orEmpty().substringAfterLast('.', "")
-                val url = client.streamUrl(id, ext) ?: throw IOException("API de streaming absente du NAS")
+                val url = client.streamUrl(id, ext, AppSettings.currentQuality(applicationContext)) ?: throw IOException("API de streaming absente du NAS")
                 spec.withUri(Uri.parse(url))
             }
         }
