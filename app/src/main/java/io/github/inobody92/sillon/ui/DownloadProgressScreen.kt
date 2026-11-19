@@ -110,6 +110,8 @@ private fun TaskCard(task: RemoteTask, onCancel: (RemoteTask) -> Unit) {
                     LinearProgressIndicator(progress = { (task.percent / 100f).coerceIn(0f, 1f) }, modifier = Modifier.weight(1f))
                     Text("${task.percent.toInt()} %", style = MaterialTheme.typography.labelLarge)
                 }
+                // L'étape (téléchargement, conversion, classement…) : sans elle, 0 % pendant plusieurs secondes ressemble à une panne.
+                Text(task.state, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 if (task.total > 1) Text("${task.done} sur ${plural(task.total, "titre")}", style = MaterialTheme.typography.bodyMedium)
                 task.currentTrack?.let {
                     Text("En cours : $it", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -120,9 +122,6 @@ private fun TaskCard(task: RemoteTask, onCancel: (RemoteTask) -> Unit) {
                     if (task.errors > 0) plural(task.errors, "erreur") else null,
                 ).joinToString(" · ")
                 if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (task.currentTrack == null && details.isEmpty()) {
-                    Text(task.state, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             } else {
                 Text("En attente · position ${(task.position ?: 0) + 1} dans la file", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
