@@ -23,7 +23,7 @@ Lots 1 à 5 : connexion au NAS (OTP, device de confiance), albums avec pochettes
 - [x] Navigation par artistes et genres (lecture ou aléatoire d'un artiste entier)
 - [x] Réglages : mode sombre (système / clair / sombre), choix de la qualité audio Wi-Fi / mobile (si le NAS sait convertir en MP3)
 - [x] Filtre par genre sur la grille d'albums
-- [ ] Mix du jour, radio par humeur
+- [x] Accueil : mix du jour (stable dans la journée, orienté vers les titres peu écoutés) et radios par humeur sans fin (genres modifiables)
 - [ ] Android Auto
 - [ ] Hors-ligne
 - [ ] Android Auto, paroles, édition des tags

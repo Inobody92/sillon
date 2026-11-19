@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -86,7 +87,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
 
     var album by rememberSaveable(stateSaver = AlbumSaver) { mutableStateOf(null) }
     var playlist by rememberSaveable(stateSaver = PlaylistSaver) { mutableStateOf(null) }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Accueil, 1 Albums, 2 Artistes, 3 Playlists, 4 Recherche
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -238,6 +239,23 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                     }
                     tab == 0 -> {
                         val browse by browseVm.state.collectAsStateWithLifecycle()
+                        val appContext = LocalContext.current.applicationContext as android.app.Application
+                        val homeVm: HomeViewModel = viewModel(
+                            key = "home/${client.creds.url}/${client.creds.account}",
+                            factory = viewModelFactory { initializer { HomeViewModel(appContext, client) } },
+                        )
+                        HomeScreen(
+                            vm = homeVm,
+                            client = client,
+                            imageLoader = imageLoader,
+                            libraryGenres = browse.genres.map { it.name },
+                            onPlayMix = { songs -> player.play(client, songs, 0) },
+                            onPlayRadio = { mood -> player.playRadio(mood) },
+                            onSettings = { showSettings = true },
+                        )
+                    }
+                    tab == 1 -> {
+                        val browse by browseVm.state.collectAsStateWithLifecycle()
                         AlbumsScreen(
                             client, imageLoader,
                             onOpenAlbum = { album = it },
@@ -254,8 +272,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             },
                         )
                     }
-                    tab == 1 -> BrowseScreen(browseVm, onOpenArtist = { artist = it }, onOpenGenre = { genre = it })
-                    tab == 2 -> PlaylistsScreen(playlistsVm, onOpen = { playlist = it }, onMessage = showMessage)
+                    tab == 2 -> BrowseScreen(browseVm, onOpenArtist = { artist = it }, onOpenGenre = { genre = it })
+                    tab == 3 -> PlaylistsScreen(playlistsVm, onOpen = { playlist = it }, onMessage = showMessage)
                     else -> SearchScreen(
                         vm = searchVm,
                         client = client,
@@ -285,24 +303,30 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                         NavigationBarItem(
                             selected = tab == 0,
                             onClick = { tab = 0; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Album, contentDescription = null) },
-                            label = { Text("Albums") },
+                            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                            label = { Text("Accueil") },
                         )
                         NavigationBarItem(
                             selected = tab == 1,
                             onClick = { tab = 1; resetNavigation() },
-                            icon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                            label = { Text("Artistes") },
+                            icon = { Icon(Icons.Filled.Album, contentDescription = null) },
+                            label = { Text("Albums") },
                         )
                         NavigationBarItem(
                             selected = tab == 2,
                             onClick = { tab = 2; resetNavigation() },
-                            icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
-                            label = { Text("Playlists") },
+                            icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                            label = { Text("Artistes") },
                         )
                         NavigationBarItem(
                             selected = tab == 3,
                             onClick = { tab = 3; resetNavigation() },
+                            icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null) },
+                            label = { Text("Playlists") },
+                        )
+                        NavigationBarItem(
+                            selected = tab == 4,
+                            onClick = { tab = 4; resetNavigation() },
                             icon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             label = { Text("Recherche") },
                         )

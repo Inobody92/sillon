@@ -1,6 +1,7 @@
 package io.github.inobody92.sillon.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -180,6 +181,77 @@ class SynoClient(val creds: Credentials) {
         return List(arr.length()) { i -> Genre(arr.getJSONObject(i).optString("name")) }
             .filter { it.name.isNotBlank() }
             .sortedBy { it.name.lowercase() }
+    }
+
+    // --- tirage aléatoire (mix du jour, radio) ----------------------------------------
+
+    private val totals = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /** Nombre de titres de la bibliothèque (ou d'un genre). Mis en cache : la bibliothèque bouge peu. */
+    suspend fun songTotal(genre: String?): Int {
+        val key = genre.orEmpty()
+        totals[key]?.let { return it }
+        val params = mutableMapOf("offset" to "0", "limit" to "1", "library" to "all")
+        genre?.let { params["genre"] = it }
+        val total = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data").optInt("total", 0)
+        totals[key] = total
+        return total
+    }
+
+    private suspend fun songsPage(genre: String?, offset: Int, limit: Int): List<Song> {
+        val params = mutableMapOf(
+            "offset" to "$offset",
+            "limit" to "$limit",
+            "library" to "all",
+            "additional" to "song_tag,song_audio",
+        )
+        genre?.let { params["genre"] = it }
+        val arr = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data").optJSONArray("songs")
+            ?: return emptyList()
+        return List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }
+    }
+
+    /**
+     * Tire [count] titres au hasard, dans les [genres] donnés (toute la bibliothèque si vide).
+     * Le NAS ne sait pas trier au hasard : on lit de petites tranches à des positions tirées au sort,
+     * en parallèle, pondérées par la taille de chaque genre. [random] rend le tirage reproductible
+     * (même graine = même sélection tant que la bibliothèque ne change pas).
+     */
+    suspend fun randomSongs(count: Int, genres: Collection<String>?, random: kotlin.random.Random): List<Song> =
+        kotlinx.coroutines.coroutineScope {
+            val sources: List<String?> = if (genres.isNullOrEmpty()) listOf(null) else genres.toList()
+            val sized = sources.map { g -> async { g to songTotal(g) } }
+                .map { it.await() }
+                .filter { it.second > 0 }
+            if (sized.isEmpty()) return@coroutineScope emptyList()
+            val sum = sized.sumOf { it.second }
+            val slice = 3
+            // On sur-échantillonne : des doublons et des titres déjà joués seront écartés ensuite.
+            val requests = List(kotlin.math.ceil(count * 2.0 / slice).toInt()) {
+                var pick = random.nextInt(sum)
+                val (genre, total) = sized.first { (_, t) -> if (pick < t) true else { pick -= t; false } }
+                genre to random.nextInt(maxOf(1, total - slice + 1))
+            }
+            requests.map { (g, off) -> async { runCatching { songsPage(g, off, slice) }.getOrDefault(emptyList()) } }
+                .flatMap { it.await() }
+                .distinctBy { it.id }
+                .shuffled(random)
+        }
+
+    /** Retrouve des titres à partir de leurs identifiants (dans l'ordre demandé). */
+    suspend fun songsByIds(ids: List<String>): List<Song> {
+        if (ids.isEmpty()) return emptyList()
+        val data = call(
+            "SYNO.AudioStation.Song", "getinfo",
+            params = mapOf(
+                "id" to ids.joinToString(",") { it.replace("\\", "\\\\").replace(",", "\\,") },
+                "library" to "all",
+                "additional" to "song_tag,song_audio",
+            ),
+        ).getJSONObject("data")
+        val arr = data.optJSONArray("songs") ?: return emptyList()
+        val byId = List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }.associateBy { it.id }
+        return ids.mapNotNull { byId[it] }
     }
 
     /** Titres dont le titre contient [query]. */

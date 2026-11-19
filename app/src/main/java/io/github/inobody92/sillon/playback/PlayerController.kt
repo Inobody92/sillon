@@ -69,7 +69,7 @@ class PlayerController(context: Context) {
         val albumArtwork = album?.let { client.coverUrl(it, withSid = true) }?.let(Uri::parse)
         return songs.map { song ->
             val artwork = albumArtwork ?: client.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
-            toMediaItem(song, album, artwork)
+            MediaItems.song(song, album, artwork)
         }
     }
 
@@ -115,6 +115,16 @@ class PlayerController(context: Context) {
                 it.addMediaItems(items)
             }
         }
+    }
+
+    /**
+     * Démarre une radio : le service fabrique la première série de titres et la prolonge tout seul
+     * (voir PlaybackService). On lui envoie seulement l'identifiant de l'humeur.
+     */
+    fun playRadio(mood: io.github.inobody92.sillon.data.Mood) = withController {
+        it.setMediaItem(MediaItem.Builder().setMediaId("radio:${mood.id}").build())
+        it.prepare()
+        it.play()
     }
 
     fun skipTo(index: Int) = withController {
@@ -187,39 +197,5 @@ class PlayerController(context: Context) {
             hasNext = p.hasNextMediaItem(),
             hasPrevious = p.hasPreviousMediaItem(),
         )
-    }
-
-    private fun toMediaItem(song: Song, album: Album?, artwork: Uri?): MediaItem {
-        val uri = Uri.Builder()
-            .scheme(PlaybackService.SCHEME)
-            .authority("song")
-            .appendPath("${song.id}.${song.ext}")
-            .appendQueryParameter("id", song.id)
-            .build()
-        val metadata = MediaMetadata.Builder()
-            .setTitle(song.title)
-            .setArtist(song.artist.ifBlank { album?.displayArtist.orEmpty() })
-            .setAlbumTitle(song.album.ifBlank { album?.name.orEmpty() })
-            .setAlbumArtist(song.albumArtist.ifBlank { album?.displayArtist.orEmpty() })
-            .setTrackNumber(song.track.takeIf { it > 0 })
-            .setDurationMs(song.durationSec.takeIf { it > 0 }?.let { it * 1000L })
-            .setArtworkUri(artwork)
-            .build()
-        return MediaItem.Builder()
-            .setMediaId(song.id)
-            .setUri(uri)
-            .setMimeType(mimeFor(song.ext))
-            .setMediaMetadata(metadata)
-            .build()
-    }
-
-    private fun mimeFor(ext: String): String? = when (ext) {
-        "m4a", "mp4", "aac" -> "audio/mp4"
-        "mp3" -> "audio/mpeg"
-        "flac" -> "audio/flac"
-        "ogg", "oga" -> "audio/ogg"
-        "opus" -> "audio/opus"
-        "wav" -> "audio/wav"
-        else -> null
     }
 }
