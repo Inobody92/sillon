@@ -45,6 +45,8 @@ data class Song(
     val ext: String,
 )
 
+data class Artist(val name: String)
+
 data class Playlist(val id: String, val name: String) {
     val isShared: Boolean get() = id.contains("shared")
 }
@@ -126,11 +128,18 @@ class SynoClient(val creds: Credentials) {
         }
     }
 
-    suspend fun albums(offset: Int, limit: Int): List<Album> {
-        val data = call(
-            "SYNO.AudioStation.Album", "list",
-            params = mapOf("offset" to "$offset", "limit" to "$limit", "library" to "all"),
-        ).getJSONObject("data")
+    suspend fun albums(
+        offset: Int,
+        limit: Int,
+        artist: String? = null,
+        genre: String? = null,
+        filter: String? = null,
+    ): List<Album> {
+        val params = mutableMapOf("offset" to "$offset", "limit" to "$limit", "library" to "all")
+        artist?.let { params["artist"] = it }
+        genre?.let { params["genre"] = it }
+        filter?.let { params["filter"] = it }
+        val data = call("SYNO.AudioStation.Album", "list", params = params).getJSONObject("data")
         val arr = data.optJSONArray("albums") ?: return emptyList()
         return List(arr.length()) { i ->
             val o = arr.getJSONObject(i)
@@ -141,6 +150,48 @@ class SynoClient(val creds: Credentials) {
                 year = o.optInt("year"),
             )
         }
+    }
+
+    suspend fun artists(offset: Int, limit: Int, filter: String? = null): List<Artist> {
+        val params = mutableMapOf("offset" to "$offset", "limit" to "$limit", "library" to "all")
+        filter?.let { params["filter"] = it }
+        val data = call("SYNO.AudioStation.Artist", "list", params = params).getJSONObject("data")
+        val arr = data.optJSONArray("artists") ?: return emptyList()
+        return List(arr.length()) { i -> Artist(arr.getJSONObject(i).optString("name")) }
+            .filter { it.name.isNotBlank() }
+    }
+
+    /** Titres dont le titre contient [query]. */
+    suspend fun searchSongs(query: String, limit: Int = 50): List<Song> {
+        val data = call(
+            "SYNO.AudioStation.Song", "search",
+            params = mapOf(
+                "offset" to "0",
+                "limit" to "$limit",
+                "library" to "all",
+                "title" to query,
+                "additional" to "song_tag,song_audio",
+            ),
+        ).getJSONObject("data")
+        val arr = data.optJSONArray("songs") ?: return emptyList()
+        return List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }
+    }
+
+    /** Tous les titres d'un artiste, rangés par album puis par piste. */
+    suspend fun songsByArtist(artist: String): List<Song> {
+        val data = call(
+            "SYNO.AudioStation.Song", "list",
+            params = mapOf(
+                "offset" to "0",
+                "limit" to "5000",
+                "library" to "all",
+                "artist" to artist,
+                "additional" to "song_tag,song_audio",
+            ),
+        ).getJSONObject("data")
+        val arr = data.optJSONArray("songs") ?: return emptyList()
+        return List(arr.length()) { i -> parseSong(arr.getJSONObject(i)) }
+            .sortedWith(compareBy({ it.album.lowercase() }, { it.disc }, { it.track }))
     }
 
     suspend fun songs(album: Album): List<Song> {

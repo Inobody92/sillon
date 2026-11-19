@@ -16,8 +16,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+data class QueueItem(val mediaId: String, val title: String, val artist: String, val artwork: String?)
+
 data class PlayerUi(
     val hasItem: Boolean = false,
+    val mediaId: String = "",
+    val queue: List<QueueItem> = emptyList(),
+    val currentIndex: Int = 0,
+    val shuffle: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val title: String = "",
     val artist: String = "",
     val album: String = "",
@@ -58,21 +65,81 @@ class PlayerController(context: Context) {
         )
     }
 
+    private fun itemsFor(client: SynoClient, songs: List<Song>, album: Album?): List<MediaItem> {
+        val albumArtwork = album?.let { client.coverUrl(it, withSid = true) }?.let(Uri::parse)
+        return songs.map { song ->
+            val artwork = albumArtwork ?: client.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
+            toMediaItem(song, album, artwork)
+        }
+    }
+
     /**
      * Lance la lecture de [songs] à partir de l'index [startIndex].
      * Si [album] est fourni, sa pochette sert pour tous les morceaux ; sinon, celle de chaque morceau.
      */
     fun play(client: SynoClient, songs: List<Song>, startIndex: Int, album: Album? = null) {
         if (songs.isEmpty()) return
-        val albumArtwork = album?.let { client.coverUrl(it, withSid = true) }?.let(Uri::parse)
-        val items = songs.map { song ->
-            val artwork = albumArtwork ?: client.songCoverUrl(song.id, withSid = true)?.let(Uri::parse)
-            toMediaItem(song, album, artwork)
-        }
+        val items = itemsFor(client, songs, album)
         withController {
             it.setMediaItems(items, startIndex.coerceIn(items.indices), 0L)
             it.prepare()
             it.play()
+        }
+    }
+
+    /** Insère [songs] juste après le morceau en cours (ou lance la lecture si la file est vide). */
+    fun playNext(client: SynoClient, songs: List<Song>, album: Album? = null) {
+        if (songs.isEmpty()) return
+        val items = itemsFor(client, songs, album)
+        withController {
+            if (it.mediaItemCount == 0) {
+                it.setMediaItems(items)
+                it.prepare()
+                it.play()
+            } else {
+                it.addMediaItems(it.currentMediaItemIndex + 1, items)
+            }
+        }
+    }
+
+    /** Ajoute [songs] en fin de file (ou lance la lecture si la file est vide). */
+    fun addToQueue(client: SynoClient, songs: List<Song>, album: Album? = null) {
+        if (songs.isEmpty()) return
+        val items = itemsFor(client, songs, album)
+        withController {
+            if (it.mediaItemCount == 0) {
+                it.setMediaItems(items)
+                it.prepare()
+                it.play()
+            } else {
+                it.addMediaItems(items)
+            }
+        }
+    }
+
+    fun skipTo(index: Int) = withController {
+        if (index in 0 until it.mediaItemCount) {
+            it.seekTo(index, 0L)
+            it.play()
+        }
+    }
+
+    fun removeFromQueue(index: Int) = withController {
+        if (index in 0 until it.mediaItemCount) it.removeMediaItem(index)
+    }
+
+    fun moveInQueue(from: Int, to: Int) = withController {
+        if (from in 0 until it.mediaItemCount && to in 0 until it.mediaItemCount) it.moveMediaItem(from, to)
+    }
+
+    fun toggleShuffle() = withController { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+
+    /** Répétition : aucune, toute la file, puis le morceau en cours. */
+    fun cycleRepeat() = withController {
+        it.repeatMode = when (it.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
         }
     }
 
@@ -98,6 +165,19 @@ class PlayerController(context: Context) {
         val md = p.mediaMetadata
         _ui.value = PlayerUi(
             hasItem = p.currentMediaItem != null,
+            mediaId = p.currentMediaItem?.mediaId.orEmpty(),
+            queue = List(p.mediaItemCount) { i ->
+                val item = p.getMediaItemAt(i)
+                QueueItem(
+                    mediaId = item.mediaId,
+                    title = item.mediaMetadata.title?.toString().orEmpty(),
+                    artist = item.mediaMetadata.artist?.toString().orEmpty(),
+                    artwork = item.mediaMetadata.artworkUri?.toString(),
+                )
+            },
+            currentIndex = p.currentMediaItemIndex,
+            shuffle = p.shuffleModeEnabled,
+            repeatMode = p.repeatMode,
             title = md.title?.toString().orEmpty(),
             artist = md.artist?.toString().orEmpty(),
             album = md.albumTitle?.toString().orEmpty(),

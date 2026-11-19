@@ -101,3 +101,9 @@ Paramètre `library` : `personal` ou `shared`.
 - `create` accepte `songs=""` (playlist vide). `rename` prend `id` et `new_name`.
 - `list` avec `library=all` renvoie aussi la playlist système `__SYNO_AUDIO_SHARED_SONGS__` (masquée par Sillon).
 - Pochette d'un morceau : `SYNO.AudioStation.Cover` / `getsongcover` / `id=<songId>`.
+
+## Recherche et listes filtrées (vérifié, lot 4)
+- Titres : `SYNO.AudioStation.Song` / `search` avec `title=<texte>` (+ `additional=song_tag,song_audio`). Recherche « contient », insensible à la casse.
+- Albums : `SYNO.AudioStation.Album` / `list` avec `filter=<texte>` (« contient », insensible à la casse).
+- Artistes : `SYNO.AudioStation.Artist` / `list` (`filter` accepté par l'ancienne app).
+- Album d'un artiste : `Album.list` avec `artist=<nom>` ; genre : `genre=<nom>`.

@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -40,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.Player
 import coil3.ImageLoader
 import io.github.inobody92.sillon.playback.PlayerController
 import io.github.inobody92.sillon.playback.PlayerUi
@@ -111,6 +117,8 @@ fun NowPlayingScreen(
     player: PlayerController,
     imageLoader: ImageLoader,
     onClose: () -> Unit,
+    onOpenQueue: () -> Unit,
+    onAddToPlaylist: (mediaId: String) -> Unit,
 ) {
     val position = rememberPosition(player, active = true)
     var dragging by remember { mutableStateOf(false) }
@@ -187,6 +195,30 @@ fun NowPlayingScreen(
                 Spacer(Modifier.width(16.dp))
                 IconButton(onClick = player::next, enabled = ui.hasNext, modifier = Modifier.size(64.dp)) {
                     Icon(Icons.Filled.SkipNext, contentDescription = "Suivant", modifier = Modifier.size(36.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                IconButton(onClick = player::toggleShuffle) {
+                    Icon(
+                        Icons.Filled.Shuffle,
+                        contentDescription = if (ui.shuffle) "Aléatoire activé" else "Aléatoire désactivé",
+                        tint = if (ui.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = player::cycleRepeat) {
+                    val active = ui.repeatMode != Player.REPEAT_MODE_OFF
+                    Icon(
+                        if (ui.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                        contentDescription = "Répéter",
+                        tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = onOpenQueue) {
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "File d'attente")
+                }
+                IconButton(onClick = { onAddToPlaylist(ui.mediaId) }) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Ajouter à une playlist")
                 }
             }
             Spacer(Modifier.weight(1f))

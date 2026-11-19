@@ -158,6 +158,8 @@ fun PlaylistDetailScreen(
     onBack: () -> Unit,
     onPlay: (songs: List<Song>, startIndex: Int) -> Unit,
     onMessage: (String) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onAddToQueue: (Song) -> Unit,
 ) {
     val vm: PlaylistDetailViewModel = viewModel(
         key = "playlist/${playlist.id}",
@@ -272,6 +274,14 @@ fun PlaylistDetailScreen(
                                         Icon(Icons.Filled.MoreVert, contentDescription = "Options")
                                     }
                                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("Lire ensuite") },
+                                            onClick = { menu = false; onPlayNext(entry.song) },
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Ajouter à la file") },
+                                            onClick = { menu = false; onAddToQueue(entry.song) },
+                                        )
                                         DropdownMenuItem(
                                             text = { Text("Retirer de la playlist") },
                                             onClick = {

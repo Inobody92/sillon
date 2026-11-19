@@ -97,6 +97,9 @@ fun AlbumDetailScreen(
     onBack: () -> Unit,
     onPlay: (songs: List<Song>, startIndex: Int) -> Unit,
     onAddToPlaylist: (List<Song>) -> Unit,
+    onPlayNext: (List<Song>) -> Unit,
+    onAddToQueue: (List<Song>) -> Unit,
+    onShuffle: (List<Song>) -> Unit,
 ) {
     val vm: AlbumDetailViewModel = viewModel(
         key = "album/${album.albumArtist}/${album.name}",
@@ -125,6 +128,9 @@ fun AlbumDetailScreen(
                         canPlay = state.songs.isNotEmpty(),
                         onPlay = { onPlay(state.songs, 0) },
                         onAddAll = { onAddToPlaylist(state.songs) },
+                        onShuffle = { onShuffle(state.songs) },
+                        onPlayNext = { onPlayNext(state.songs) },
+                        onAddToQueue = { onAddToQueue(state.songs) },
                     )
                 }
                 if (state.loading) {
@@ -148,6 +154,8 @@ fun AlbumDetailScreen(
                         showDisc = state.songs.any { it.disc > 1 },
                         onClick = { onPlay(state.songs, index) },
                         onAdd = { onAddToPlaylist(listOf(song)) },
+                        onPlayNext = { onPlayNext(listOf(song)) },
+                        onAddToQueue = { onAddToQueue(listOf(song)) },
                     )
                 }
             }
@@ -163,6 +171,9 @@ private fun Header(
     canPlay: Boolean,
     onPlay: () -> Unit,
     onAddAll: () -> Unit,
+    onShuffle: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -201,12 +212,30 @@ private fun Header(
                 Spacer(Modifier.width(8.dp))
                 Text("Playlist")
             }
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menu = true }, enabled = canPlay) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "Plus d'options")
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Lecture aléatoire") }, onClick = { menu = false; onShuffle() })
+                    DropdownMenuItem(text = { Text("Lire ensuite") }, onClick = { menu = false; onPlayNext() })
+                    DropdownMenuItem(text = { Text("Ajouter à la file") }, onClick = { menu = false; onAddToQueue() })
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SongRow(song: Song, showDisc: Boolean, onClick: () -> Unit, onAdd: () -> Unit) {
+private fun SongRow(
+    song: Song,
+    showDisc: Boolean,
+    onClick: () -> Unit,
+    onAdd: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
+) {
     var menu by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
@@ -239,6 +268,8 @@ private fun SongRow(song: Song, showDisc: Boolean, onClick: () -> Unit, onAdd: (
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Options") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Lire ensuite") }, onClick = { menu = false; onPlayNext() })
+                DropdownMenuItem(text = { Text("Ajouter à la file") }, onClick = { menu = false; onAddToQueue() })
                 DropdownMenuItem(text = { Text("Ajouter à une playlist") }, onClick = { menu = false; onAdd() })
             }
         }
