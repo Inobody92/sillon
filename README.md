@@ -27,14 +27,15 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - Radios par humeur sans fin (Énergie, Chill, Fête, Nostalgie), construites sur les genres de ta bibliothèque
 - Qualité audio Wi-Fi / mobile, si le NAS sait convertir en MP3
 - Ajout de musique depuis l'application (facultatif) : recherche d'une chanson ou d'un artiste, envoi vers la
-  bibliothèque et suivi de l'avancement, via ton propre serveur de téléchargement (contrat décrit dans
+  bibliothèque, suivi de l'avancement et notification à la fin de chaque téléchargement, via ton propre serveur de téléchargement (contrat décrit dans
   [`docs/DOWNLOAD_SERVER.md`](docs/DOWNLOAD_SERVER.md)). Invisible tant qu'aucune adresse n'est saisie dans les réglages
 - Deux widgets d'écran d'accueil (Réglages → Widget) : un grand 4×2 avec pochette, titre, artiste et boutons précédent /
   lecture / suivant (il s'adapte aussi en bandeau ou en format haut), et un petit carré 2×2 avec la pochette en plein cadre
   et une barre de commandes flottante. Toucher le fond ramène sur l'écran de lecture
 - Égaliseur avec 11 préréglages (basses, voix, rock, jazz, loudness…) et réglage fin sur 5 fréquences, appliqué à toute
   la lecture (haut-parleur, Bluetooth, voiture)
-- Écran de lecture au choix : platine vinyle (45 tours, bras de lecture qui sert de curseur), égaliseur à segments
+- Écran de lecture au choix : platine vinyle (45 tours, bras de lecture qui sert de curseur, disque coloré façon
+  vinyle splatter, spirale, marbré ou anneaux, aux couleurs et proportions de la pochette), égaliseur à segments
   piloté par le son réellement joué (analyse en direct, rien n'est envoyé nulle part), ou pochette seule
 
 **Playlists et favoris**
@@ -122,7 +123,7 @@ app/src/main/java/io/github/inobody92/sillon/
 ## Développement
 
 ```
-./gradlew testDebugUnitTest          # 54 tests unitaires
+./gradlew testDebugUnitTest          # tests unitaires
 ./gradlew assembleDebug
 ```
 
@@ -145,9 +146,9 @@ ne pourras plus publier de mise à jour installable par-dessus l'ancienne versio
 1. Monte `versionCode` et `versionName` dans `app/build.gradle.kts`, puis commite.
 2. Une seule fois : `scripts/configurer-secrets-release.sh` envoie ta clé de signature dans les secrets chiffrés du
    dépôt (`gh auth login` d'abord). Elle ne passe jamais par le dépôt lui-même.
-3. `git tag v1.5.0 && git push origin v1.5.0` : le workflow [`release.yml`](.github/workflows/release.yml) vérifie que
+3. `git tag v1.6.0 && git push origin v1.6.0` : le workflow [`release.yml`](.github/workflows/release.yml) vérifie que
    le tag correspond à `versionName`, lance les tests, construit et signe l'APK, contrôle sa signature, puis publie la
-   release avec `Sillon-1.5.0.apk` et son empreinte SHA-256. Sans les secrets de signature, il s'arrête sans rien publier.
+   release avec `Sillon-1.6.0.apk` et son empreinte SHA-256. Sans les secrets de signature, il s'arrête sans rien publier.
 
 Les applications déjà installées proposent alors la mise à jour au prochain lancement.
 

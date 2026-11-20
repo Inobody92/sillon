@@ -43,7 +43,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.toBitmap
+import io.github.inobody92.sillon.data.SynoClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -152,6 +162,36 @@ fun Turntable(
     val accent = MaterialTheme.colorScheme.primary
     val vinyl = Color(0xFF15100F)
 
+    // Taches aux couleurs de la pochette, comme certains vinyles colorés.
+    val splatterColors by produceState(emptyList<WeightedColor>(), artwork) {
+        value = emptyList()
+        if (artwork == null) return@produceState
+        value = withContext(Dispatchers.Default) {
+            try {
+                val key = SynoClient.stableKey(artwork)
+                val request = ImageRequest.Builder(context).data(artwork).size(48).allowHardware(false).diskCacheKey(key).build()
+                val bitmap = (imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap()
+                    ?: return@withContext emptyList()
+                val pixels = IntArray(bitmap.width * bitmap.height).also { bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) }
+                dominantColors(pixels)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+    }
+    // Une seule couleur dominante : le second ton est la même teinte éclaircie.
+    val palette = remember(splatterColors) {
+        if (splatterColors.size == 1) {
+            val only = splatterColors[0].color
+            listOf(only, androidx.compose.ui.graphics.lerp(only, Color.White, 0.6f))
+        } else splatterColors.map { it.color }
+    }
+    val shares = remember(splatterColors) {
+        if (splatterColors.size == 1) listOf(0.9f, 0.1f) else splatterColors.map { it.share }
+    }
+    val splatter = remember(artwork, shares) { splatterFor(artwork.hashCode(), shares) }
+    val splatterAlpha by animateFloatAsState(if (splatterColors.isEmpty()) 0f else 1f, tween(600), label = "taches")
+
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
@@ -212,6 +252,63 @@ fun Turntable(
             val center = Offset(g.cx, g.cy)
             drawCircle(Color.Black.copy(alpha = 0.30f), radius = g.r * 1.03f, center = center + Offset(0f, g.r * 0.02f))
             drawCircle(vinyl, radius = g.r, center = center)
+        }
+
+        // Taches : tournent avec le disque.
+        Canvas(Modifier.fillMaxSize().graphicsLayer { rotationZ = -angle.value }) {
+            if (splatter.isEmpty || splatterAlpha <= 0f) return@Canvas
+            val center = Offset(g.cx, g.cy)
+            val disc = Path().apply { addOval(androidx.compose.ui.geometry.Rect(center, g.r * 0.985f)) }
+            clipPath(disc) {
+                // Disque teinté, puis secteurs des autres couleurs.
+                drawCircle(palette[splatter.base].copy(alpha = 0.93f * splatterAlpha), radius = g.r, center = center)
+                splatter.wedges.forEach { w ->
+                    val path = Path()
+                    w.points.forEachIndexed { k, (x, y) ->
+                        val o = center + Offset(x * g.r, y * g.r)
+                        if (k == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                    }
+                    path.close()
+                    drawPath(path, palette[w.colorIndex].copy(alpha = w.alpha * splatterAlpha))
+                }
+                splatter.rings.forEach { ring ->
+                    drawCircle(
+                        palette[ring.colorIndex].copy(alpha = 0.92f * splatterAlpha),
+                        radius = ring.rho * g.r, center = center,
+                        style = Stroke(width = ring.width * g.r),
+                    )
+                }
+                // Traînées en pointe (sombres ou colorées, droites ou courbées), puis gouttelettes.
+                val ink = Color(0xFF0B0707)
+                fun paint(index: Int) = (if (index < 0) ink else palette[index]).copy(alpha = 0.84f * splatterAlpha)
+                splatter.streaks.forEach { st ->
+                    val from = center + Offset(st.x0 * g.r, st.y0 * g.r)
+                    val to = center + Offset(st.x1 * g.r, st.y1 * g.r)
+                    val dx = to.x - from.x
+                    val dy = to.y - from.y
+                    val len = hypot(dx, dy).coerceAtLeast(0.001f)
+                    val ux = -dy / len
+                    val uy = dx / len
+                    val half = st.width * g.r / 2f
+                    // Point de contrôle décalé : la traînée se courbe légèrement.
+                    val mid = Offset((from.x + to.x) / 2f + ux * st.bend * len, (from.y + to.y) / 2f + uy * st.bend * len)
+                    val tri = Path().apply {
+                        moveTo(from.x + ux * half, from.y + uy * half)
+                        quadraticTo(mid.x + ux * half * 0.5f, mid.y + uy * half * 0.5f, to.x, to.y)
+                        quadraticTo(mid.x - ux * half * 0.5f, mid.y - uy * half * 0.5f, from.x - ux * half, from.y - uy * half)
+                        close()
+                    }
+                    drawPath(tri, paint(st.colorIndex))
+                }
+                splatter.dots.forEach { d ->
+                    drawCircle(paint(d.colorIndex), radius = d.radius * g.r, center = center + Offset(d.x * g.r, d.y * g.r))
+                }
+            }
+        }
+
+        // Sillons, reflets fixes (la lumière ne tourne pas avec le disque) et ombre de l'étiquette.
+        Canvas(Modifier.fillMaxSize()) {
+            val center = Offset(g.cx, g.cy)
             for (k in 0..11) {
                 val rr = g.r * (0.42f + 0.048f * k)
                 drawCircle(

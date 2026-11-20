@@ -10,6 +10,7 @@ import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.OtpRequiredException
 import io.github.inobody92.sillon.data.QuickConnect
 import io.github.inobody92.sillon.data.SecureStore
+import io.github.inobody92.sillon.data.SessionSnapshot
 import io.github.inobody92.sillon.data.SessionHolder
 import io.github.inobody92.sillon.data.SynoClient
 import io.github.inobody92.sillon.data.probeCertificate
@@ -54,8 +55,70 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (saved == null) {
             _state.value = AuthState.LoggedOut()
         } else {
-            connect(saved, otp = null, silent = true)
+            val snapshot = store.loadSession(sessionOwner(saved))
+                ?.takeIf { !(saved.insecure && saved.pinnedSha256 == null) }
+            if (snapshot != null) connectFast(saved, snapshot) else connect(saved, otp = null, silent = true)
         }
+    }
+
+    private fun sessionOwner(c: Credentials) = c.url + "|" + c.account
+
+    /**
+     * Lancement rapide : on rouvre l'application sur la dernière session connue, sans attendre le NAS (trois
+     * requêtes à la suite sinon), puis on la revalide en arrière-plan. Si elle a expiré, le premier appel se
+     * reconnecte tout seul.
+     */
+    private fun connectFast(creds: Credentials, snapshot: SessionSnapshot) {
+        val live = SynoClient(creds).also { it.adopt(snapshot) }
+        SessionHolder.client = live
+        _state.value = AuthState.LoggedIn(live)
+        viewModelScope.launch {
+            try {
+                val fresh = establish(creds, null)
+                val fresh0 = fresh.snapshot()
+                if (fresh.creds.url == live.creds.url && fresh0 != null) {
+                    live.adopt(fresh0)
+                } else {
+                    // QuickConnect : le NAS a changé d'adresse, on bascule sur le nouveau client.
+                    SessionHolder.client = fresh
+                    _state.value = AuthState.LoggedIn(fresh)
+                }
+            } catch (_: OtpRequiredException) {
+                SessionHolder.client = null
+                _state.value = AuthState.LoggedOut(otpRequired = true)
+            } catch (e: Exception) {
+                val unreachable = e is IOException && e !is SSLException
+                if (unreachable) {
+                    // Pas de réseau : l'écran hors-ligne s'il y a des titres sur le téléphone, sinon on reste là.
+                    if (OfflineStore.state.value.songs.isNotEmpty()) _state.value = AuthState.Offline
+                } else {
+                    SessionHolder.client = null
+                    _state.value = AuthState.LoggedOut(error = if (certificateChanged(e)) describe(e) else null)
+                }
+            }
+        }
+    }
+
+    /** Connexion complète (découverte, authentification, capacités) ; retrouve l'adresse QuickConnect si elle a changé. */
+    private suspend fun establish(initial: Credentials, otp: String?): SynoClient {
+        var creds = initial
+        var client = SynoClient(creds)
+        try {
+            client.connect(otp)
+        } catch (e: IOException) {
+            // QuickConnect : l'adresse du NAS a pu changer (IP, port). On la retrouve une fois, puis on réessaie.
+            val id = creds.quickConnectId
+            if (id == null || e is SSLException) throw e
+            val fresh = QuickConnect.resolve(id)
+            if (fresh == null || fresh == creds.url) throw e
+            creds = creds.copy(url = fresh)
+            client = SynoClient(creds)
+            client.connect(otp)
+        }
+        val saved = creds.copy(deviceId = client.deviceId)
+        store.save(saved)
+        client.snapshot()?.let { store.saveSession(sessionOwner(saved), it) }
+        return client
     }
 
     private var pendingCertificate: Triple<Credentials, String?, CertificateRequest>? = null
@@ -146,22 +209,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         _state.value = AuthState.Loading
         viewModelScope.launch {
-            var creds = initial
             try {
-                var client = SynoClient(creds)
-                try {
-                    client.connect(otp)
-                } catch (e: IOException) {
-                    // QuickConnect : l'adresse du NAS a pu changer (IP, port). On la retrouve une fois, puis on réessaie.
-                    val id = creds.quickConnectId
-                    if (id == null || e is SSLException) throw e
-                    val fresh = QuickConnect.resolve(id)
-                    if (fresh == null || fresh == creds.url) throw e
-                    creds = creds.copy(url = fresh)
-                    client = SynoClient(creds)
-                    client.connect(otp)
-                }
-                store.save(creds.copy(deviceId = client.deviceId))
+                val client = establish(initial, otp)
                 SessionHolder.client = client
                 _state.value = AuthState.LoggedIn(client)
             } catch (_: OtpRequiredException) {

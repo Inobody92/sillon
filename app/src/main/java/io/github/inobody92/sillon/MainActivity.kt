@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
         Likes.init(applicationContext)
         LibraryIndex.init(applicationContext)
         DownloadServerStore.init(applicationContext)
+        io.github.inobody92.sillon.data.DownloadWatch.resume(applicationContext)
         // Le widget se redessine à chaque ouverture : il reflète toujours le dernier état connu.
         lifecycleScope.launch { io.github.inobody92.sillon.widget.Widgets.updateAll(applicationContext) }
         enableEdgeToEdge()

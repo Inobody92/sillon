@@ -86,7 +86,12 @@ data class AddMusicState(
     val queueError: String? = null,
 )
 
-class AddMusicViewModel(private val server: DownloadServerClient, private val library: SynoClient) : ViewModel() {
+class AddMusicViewModel(
+    private val server: DownloadServerClient,
+    private val library: SynoClient,
+    /** Appelé avec le numéro de chaque demande acceptée par le serveur (pour la suivre en arrière-plan). */
+    private val onQueued: (Int) -> Unit = {},
+) : ViewModel() {
 
     private val _state = MutableStateFlow(AddMusicState())
     val state: StateFlow<AddMusicState> = _state.asStateFlow()
@@ -129,6 +134,7 @@ class AddMusicViewModel(private val server: DownloadServerClient, private val li
         viewModelScope.launch {
             try {
                 val task = block()
+                onQueued(task.number)
                 _messages.emit(
                     if (task.position == 0) "Téléchargement lancé : ${task.name}"
                     else "Ajouté à la file (position ${task.position}) : ${task.name}",

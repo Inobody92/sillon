@@ -31,6 +31,9 @@ data class Credentials(
 
 data class ApiInfo(val path: String, val minVersion: Int, val maxVersion: Int)
 
+/** Ce qu'il faut pour reprendre une session sans interroger le NAS : session, APIs découvertes, formats de conversion. */
+data class SessionSnapshot(val sid: String, val apis: Map<String, ApiInfo>, val transcodeFormats: Set<String>)
+
 class ApiException(val code: Int, message: String) : Exception(message)
 
 class OtpRequiredException : Exception("Code OTP requis")
@@ -94,6 +97,7 @@ class SynoClient(val creds: Credentials) {
 
     val http: OkHttpClient = buildHttp(creds)
 
+    @Volatile
     private var apis: Map<String, ApiInfo> = emptyMap()
 
     @Volatile
@@ -111,6 +115,21 @@ class SynoClient(val creds: Credentials) {
         private set
 
     val canTranscodeMp3: Boolean get() = "mp3" in transcodeFormats
+
+    fun snapshot(): SessionSnapshot? {
+        val current = sid ?: return null
+        return if (apis.isEmpty()) null else SessionSnapshot(current, apis, transcodeFormats)
+    }
+
+    /**
+     * Reprend une session mémorisée, sans réseau. Elle a pu expirer : le premier appel refusé déclenche déjà une
+     * reconnexion (voir [call]), et l'application revalide aussi la session en arrière-plan au lancement.
+     */
+    fun adopt(snapshot: SessionSnapshot) {
+        apis = snapshot.apis
+        transcodeFormats = snapshot.transcodeFormats
+        sid = snapshot.sid
+    }
 
     suspend fun connect(otp: String? = null) = withContext(Dispatchers.IO) {
         discover()

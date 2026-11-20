@@ -40,6 +40,32 @@ class SecureStore(context: Context) {
         )
     }
 
+    /** Session du NAS (identifiant de session chiffré), pour s'ouvrir sans attendre le réseau. [owner] = adresse + compte. */
+    fun saveSession(owner: String, snapshot: SessionSnapshot) {
+        val json = org.json.JSONObject()
+            .put("owner", owner)
+            .put("sid", snapshot.sid)
+            .put("transcode", org.json.JSONArray(snapshot.transcodeFormats.toList()))
+            .put("apis", org.json.JSONObject().also { o ->
+                snapshot.apis.forEach { (name, i) ->
+                    o.put(name, org.json.JSONArray().put(i.path).put(i.minVersion).put(i.maxVersion))
+                }
+            })
+        prefs.edit().putString(K_SESSION, encrypt(json.toString())).apply()
+    }
+
+    fun loadSession(owner: String): SessionSnapshot? = runCatching {
+        val json = org.json.JSONObject(decrypt(prefs.getString(K_SESSION, null) ?: return null))
+        if (json.getString("owner") != owner) return null
+        val apis = json.getJSONObject("apis")
+        val transcode = json.getJSONArray("transcode")
+        SessionSnapshot(
+            json.getString("sid"),
+            apis.keys().asSequence().associateWith { k -> apis.getJSONArray(k).let { ApiInfo(it.getString(0), it.getInt(1), it.getInt(2)) } },
+            List(transcode.length()) { transcode.getString(it) }.toSet(),
+        )
+    }.getOrNull()
+
     /** Dernières valeurs saisies, pour préremplir l'écran de connexion (sans mot de passe). */
     fun lastUrl(): String = prefs.getString(K_URL, "") ?: ""
     fun lastAccount(): String = prefs.getString(K_ACCOUNT, "") ?: ""
@@ -66,7 +92,7 @@ class SecureStore(context: Context) {
 
     /** Oublie le mot de passe mais garde l'adresse, le compte et le device de confiance. */
     fun forgetPassword() {
-        prefs.edit().remove(K_PASSWORD).apply()
+        prefs.edit().remove(K_PASSWORD).remove(K_SESSION).apply()
     }
 
     private fun key(): SecretKey {
@@ -109,6 +135,7 @@ class SecureStore(context: Context) {
         const val K_DEVICE = "device_id"
         const val K_PIN = "pinned_sha256"
         const val K_QC = "quickconnect_id"
+        const val K_SESSION = "nas_session"
         const val K_DS_URL = "download_server_url"
         const val K_DS_TOKEN = "download_server_token"
         const val K_DS_PIN = "download_server_pin"
