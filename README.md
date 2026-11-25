@@ -17,7 +17,7 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - Albums, artistes, genres, pochettes ; filtre par genre sur la grille d'albums
 - Recherche instantanée et souple, grâce à un index local de la bibliothèque : sans accents ni casse, tolérante aux
   fautes de frappe, mots dans n'importe quel ordre répartis entre titre, artiste, album et genre
-- Accueil : mix du jour, albums écoutés et ajoutés récemment, reprise de la lecture interrompue
+- Accueil : mix du jour, albums écoutés et ajoutés récemment
 
 **Lecture**
 - Lecture en arrière-plan avec notification et écran de verrouillage, file d'attente modifiable (lire ensuite,
@@ -25,9 +25,12 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - Cache disque des titres écoutés et préchargement des deux titres suivants : l'enchaînement ne dépend plus du réseau
 - Minuteur de sommeil : dans N minutes (le son baisse doucement), à la fin du titre ou de la file
 - Radios par humeur sans fin (Énergie, Chill, Fête, Nostalgie), construites sur les genres de ta bibliothèque
+- Le titre en cours est marqué par des barres d'égaliseur animées dans les albums et les playlists ; dans le lecteur,
+  toucher la pochette ouvre l'album et toucher le nom de l'artiste ouvre sa discographie
 - Qualité audio Wi-Fi / mobile, si le NAS sait convertir en MP3
 - Ajout de musique depuis l'application (facultatif) : recherche d'une chanson ou d'un artiste, envoi vers la
-  bibliothèque, suivi de l'avancement et notification à la fin de chaque téléchargement, via ton propre serveur de téléchargement (contrat décrit dans
+  bibliothèque, suivi de l'avancement, notification à la fin de chaque téléchargement et bouton **Réessayer** en cas
+  d'échec (avec la raison donnée par le serveur), via ton propre serveur de téléchargement (contrat décrit dans
   [`docs/DOWNLOAD_SERVER.md`](docs/DOWNLOAD_SERVER.md)). Invisible tant qu'aucune adresse n'est saisie dans les réglages
 - Deux widgets d'écran d'accueil (Réglages → Widget) : un grand 4×2 avec pochette, titre, artiste et boutons précédent /
   lecture / suivant (il s'adapte aussi en bandeau ou en format haut), et un petit carré 2×2 avec la pochette en plein cadre
@@ -43,6 +46,23 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
 - **Titres likés** : une vraie playlist du NAS (donc visible partout, y compris dans la voiture), un seul exemplaire
   par titre, un cœur sur chaque titre, dans le lecteur, la notification et Android Auto
 - Notation par étoiles
+
+**Goûts et titres masqués**
+- **Le mix du jour et les radios s'adaptent à toi.** Le tirage est pondéré : on favorise les artistes et les genres les
+  mieux notés (moyenne lissée, un like compte pour 5 étoiles), on évite les titres déjà tombés (de moins en moins avec
+  le temps) et ceux écoutés récemment, avec au plus 3 titres par artiste. Un titre écouté en entier ou passé après
+  quelques secondes affine aussi le profil, plus faiblement que les notes. L'écran **Mes goûts** (Réglages) montre ce
+  que l'application a compris
+- **Titres masqués** : ne plus jamais entendre un titre, un album ou un artiste entier (mix, radios, aléatoire, files,
+  Android Auto). Les titres masqués sont une playlist personnelle du NAS, propre à chaque compte
+- **Sauvegarde sur le NAS** : l'exposition des titres, les statistiques d'écoute, les règles de masquage d'albums et
+  d'artistes et les couleurs choisies sont enregistrées dans `/home/.sillon/profil.json` (dossier personnel de
+  l'utilisateur, via File Station) : un nouveau téléphone ou une réinstallation reprennent où tu en étais
+
+**Thème**
+- Clair, sombre ou système ; couleurs du système (Material You, Android 12+) ; **couleurs personnalisées** :
+  choix d'une couleur principale et d'une secondaire, les fonds en prennent la teinte et les contrastes de lecture
+  sont garantis pour toute couleur
 
 **Hors-ligne**
 - Albums, playlists et titres likés téléchargeables (Wi-Fi uniquement par défaut), lecture sans le NAS,
