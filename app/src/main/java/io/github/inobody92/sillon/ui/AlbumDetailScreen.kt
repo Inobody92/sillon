@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -274,14 +275,27 @@ private fun SongRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            if (song.track > 0) (if (showDisc) "${song.disc}.${song.track}" else "${song.track}") else "–",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(36.dp),
-        )
+        val nowPlaying = LocalNowPlaying.current
+        val current = nowPlaying.isCurrent(song.id)
+        Box(Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
+            if (current) {
+                NowPlayingBars(nowPlaying.isPlaying, MaterialTheme.colorScheme.primary)
+            } else {
+                Text(
+                    if (song.track > 0) (if (showDisc) "${song.disc}.${song.track}" else "${song.track}") else "–",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Column(Modifier.weight(1f)) {
-            Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                song.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (current) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (song.artist.isNotBlank()) {
                 Text(
                     song.artist,

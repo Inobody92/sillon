@@ -93,6 +93,9 @@ object LibraryIndex {
         _state.value = IndexState(ready = true, building = false, size = songs.size)
     }
 
+    /** Toute la bibliothèque connue de l'index (vide tant qu'il n'est pas prêt). */
+    fun allSongs(): List<Song> = engine.allSongs()
+
     /** Titres de l'index pour ces identifiants (dans l'ordre donné ; les inconnus sont ignorés). */
     fun songsByIds(ids: List<String>): List<Song> = engine.songsByIds(ids)
 

@@ -29,6 +29,8 @@ class SearchEngine(songs: List<Song>) {
     val size: Int get() = entries.size
 
     /** Titres de l'index pour ces identifiants (dans l'ordre donné ; les inconnus sont ignorés). */
+    fun allSongs(): List<Song> = entries.map { it.song }
+
     fun songsByIds(ids: List<String>): List<Song> {
         val byId = entries.associateBy({ it.song.id }, { it.song })
         return ids.mapNotNull { byId[it] }

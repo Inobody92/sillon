@@ -8,7 +8,15 @@ import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.DailyMix
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
+import io.github.inobody92.sillon.data.ExposureStore
+import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.PlayHistory
+import io.github.inobody92.sillon.data.SongWeigher
+import io.github.inobody92.sillon.data.TasteStore
+import io.github.inobody92.sillon.data.TasteTuning
+import io.github.inobody92.sillon.data.artistKey
+import io.github.inobody92.sillon.data.normalizeKey
+import io.github.inobody92.sillon.data.weightedSample
 import io.github.inobody92.sillon.data.SessionHolder
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
@@ -110,10 +118,19 @@ class LibraryTree(private val context: Context) {
         val mood = Mood.entries.firstOrNull { it.id == moodId } ?: return emptyList()
         val library = c.genres().map { it.name }
         val genres = MoodStore.genres(context, mood, library)
-        val skip = PlayHistory.recent(context, RADIO_RECENT_DAYS) + exclude
+        TasteStore.init(context)
+        val weigher = SongWeigher(context, PlayHistory.recent(context, RADIO_RECENT_DAYS))
+        val random = Random(System.nanoTime())
+        // Index prêt : on puise dans tous les titres des genres de l'humeur ; sinon un échantillon aléatoire du NAS.
         // Aucun genre correspondant : la radio puise dans toute la bibliothèque plutôt que de rester muette.
-        val pool = c.randomSongs(count * 2, genres.ifEmpty { null }, Random(System.nanoTime()))
-        val chosen = (pool.filter { it.id !in skip } + pool.filter { it.id in skip && it.id !in exclude }).take(count)
+        val wanted = genres.map { normalizeKey(it) }.toSet()
+        val fromIndex = LibraryIndex.allSongs().filter { wanted.isEmpty() || normalizeKey(it.genre) in wanted }
+        val pool = fromIndex.ifEmpty { c.randomSongs(count * 6, genres.ifEmpty { null }, random) }
+        val chosen = weightedSample(
+            pool.filter { it.id !in exclude }, count, random,
+            weight = weigher::weight, group = ::artistKey, maxPerGroup = TasteTuning.MAX_PER_ARTIST,
+        )
+        ExposureStore.record(context, chosen.map { it.id })
         return chosen.map { songItem(it, null, radio = moodId) }
     }
 

@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
         OfflineStore.init(applicationContext)
         Likes.init(applicationContext)
         LibraryIndex.init(applicationContext)
+        io.github.inobody92.sillon.data.TasteStore.init(applicationContext)
         DownloadServerStore.init(applicationContext)
         io.github.inobody92.sillon.data.DownloadWatch.resume(applicationContext)
         // Le widget se redessine à chaque ouverture : il reflète toujours le dernier état connu.

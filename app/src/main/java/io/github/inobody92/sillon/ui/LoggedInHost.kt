@@ -113,6 +113,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showDownloads by rememberSaveable { mutableStateOf(false) }
+    var showTaste by rememberSaveable { mutableStateOf(false) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
     var showAddMusic by rememberSaveable { mutableStateOf(false) }
     var showProgress by rememberSaveable { mutableStateOf(false) }
@@ -168,6 +169,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showAddMusic && !showProgress) { showAddMusic = false }
     BackHandler(enabled = showProgress) { showProgress = false }
+    BackHandler(enabled = showTaste) { showTaste = false }
     BackHandler(enabled = showDownloads) { showDownloads = false }
     BackHandler(enabled = showSettings && !showDownloads && !showEqualizer) { showSettings = false }
     BackHandler(enabled = showQueue) { showQueue = false }
@@ -213,7 +215,10 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
     LaunchedEffect(client) { Likes.sync(client) }
     // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
-    LaunchedEffect(client) { LibraryIndex.ensure(client) }
+    LaunchedEffect(client) {
+        LibraryIndex.ensure(client)
+        io.github.inobody92.sillon.data.TasteStore.refresh(client)
+    }
     LaunchedEffect(Unit) { Likes.errors.collect { showMessage(it) } }
 
     // Playlists téléchargées : si elles ont changé sur le NAS depuis la dernière fois, on les remet à jour.
@@ -328,6 +333,9 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             Box(Modifier.weight(1f)) {
                 val currentAlbum = album
                 val currentPlaylist = playlist
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalNowPlaying provides NowPlayingInfo(playerUi.mediaId, playerUi.isPlaying),
+                ) {
                 when {
                     currentAlbum != null -> AlbumDetailScreen(
                         client = client,
@@ -462,6 +470,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                         onAddToPlaylist = { song -> addTarget = listOf(song.id) },
                     )
                 }
+                }
             }
             // Zone basse : mini-lecteur + navigation.
             Surface(tonalElevation = 3.dp) {
@@ -493,6 +502,13 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 onOpenQueue = { showQueue = true },
                 onAddToPlaylist = { mediaId -> addTarget = listOf(mediaId) },
                 onOpenEqualizer = { showEqualizer = true },
+                onOpenAlbum = { target -> album = target; nowPlaying = false },
+                onOpenArtist = { name ->
+                    // La discographie s'ouvre à la place de ce qui était affiché ; retour = l'onglet d'avant.
+                    album = null; playlist = null; genre = null
+                    artist = name
+                    nowPlaying = false
+                },
             )
         }
         if (showSettings) {
@@ -500,6 +516,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 client = client,
                 onClose = { showSettings = false },
                 onOpenDownloads = { showDownloads = true },
+                onOpenTaste = { showTaste = true },
                 onOpenEqualizer = { showEqualizer = true },
                 onLogout = { showSettings = false; onLogout() },
             )
@@ -519,6 +536,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             )
             if (showProgress) DownloadProgressScreen(addMusicVm, onClose = { showProgress = false })
         }
+        if (showTaste) TasteScreen(client = client, onClose = { showTaste = false })
         if (showDownloads) {
             DownloadsScreen(
                 client = client,

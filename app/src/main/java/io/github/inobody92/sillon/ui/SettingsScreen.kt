@@ -57,6 +57,7 @@ fun SettingsScreen(
     client: SynoClient,
     onClose: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenTaste: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -206,6 +207,10 @@ fun SettingsScreen(
                 }
                 OutlinedButton(onClick = onOpenDownloads, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text("Gérer les téléchargements · ${formatBytes(offline.bytes)}")
+                }
+
+                OutlinedButton(onClick = onOpenTaste, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Mes goûts (notes par artiste et genre)")
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

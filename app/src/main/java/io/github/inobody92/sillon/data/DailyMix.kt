@@ -6,8 +6,9 @@ import java.time.LocalDate
 import kotlin.random.Random
 
 /**
- * Sélection du jour : une trentaine de titres tirés dans toute la bibliothèque, en privilégiant ceux
- * qu'on n'a pas écoutés récemment. La sélection est mémorisée pour la journée : elle ne change pas
+ * Sélection du jour : une trentaine de titres tirés dans toute la bibliothèque. Le tirage est pondéré : on
+ * favorise les artistes et les genres les mieux notés, et on défavorise les titres déjà tombés dans un mix ou
+ * une radio (de moins en moins avec le temps) ainsi que ceux écoutés récemment. La sélection est mémorisée pour la journée : elle ne change pas
  * à chaque ouverture de l'app (ni entre l'app et la voiture), sauf demande explicite.
  */
 object DailyMix {
@@ -34,8 +35,18 @@ object DailyMix {
         // Graine = jour + compte : même sélection toute la journée, différente demain.
         val seed = if (regenerate) System.nanoTime() else (today + owner).hashCode().toLong()
         val recent = PlayHistory.recent(context, RECENT_DAYS)
-        val pool = client.randomSongs(SIZE * 2, null, Random(seed))
-        val chosen = (pool.filter { it.id !in recent } + pool.filter { it.id in recent }).take(SIZE)
+        TasteStore.init(context)
+        val weigher = SongWeigher(context, recent)
+        val random = Random(seed)
+        // Toute la bibliothèque est candidate quand l'index est prêt ; sinon un échantillon aléatoire du NAS.
+        val library = LibraryIndex.allSongs()
+        val candidates = library.ifEmpty { client.randomSongs(SIZE * 6, null, random) }
+        val chosen = weightedSample(
+            candidates, SIZE, random,
+            weight = weigher::weight, group = ::artistKey, maxPerGroup = TasteTuning.MAX_PER_ARTIST,
+        )
+        // Seule une sélection nouvellement tirée compte comme une exposition (pas sa relecture dans la journée).
+        ExposureStore.record(context, chosen.map { it.id })
 
         if (chosen.isNotEmpty()) {
             prefs.edit()

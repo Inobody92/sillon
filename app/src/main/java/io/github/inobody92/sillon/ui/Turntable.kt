@@ -126,9 +126,13 @@ fun Turntable(
     durationMs: Long,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
+    /** Toucher l'étiquette (la pochette au centre du disque). Le reste du disque lance ou met en pause. */
+    onCoverClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // Le détecteur de tap n'est créé qu'une fois : il doit lire la valeur courante, pas celle du premier titre.
+    val coverClick by androidx.compose.runtime.rememberUpdatedState(onCoverClick)
     // Respecte le réglage Android « supprimer les animations » : le disque reste alors immobile.
     val reduceMotion = remember {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -239,13 +243,15 @@ fun Turntable(
             .pointerInput(Unit) {
                 detectTapGestures { tap ->
                     val g = geometry(size.width.toFloat())
-                    if (hypot(tap.x - g.cx, tap.y - g.cy) <= g.r) onTogglePlay()
+                    val d = hypot(tap.x - g.cx, tap.y - g.cy)
+                    val open = coverClick
+                    if (open != null && d <= g.r * LABEL_RATIO) open() else if (d <= g.r) onTogglePlay()
                 }
             },
     ) {
         val sizePx = with(LocalDensity.current) { maxWidth.toPx() }
         val g = geometry(sizePx)
-        val labelR = g.r * 0.34f
+        val labelR = g.r * LABEL_RATIO
 
         // Plateau : disque noir, sillons, reflets fixes (la lumière ne tourne pas avec le disque).
         Canvas(Modifier.fillMaxSize()) {
@@ -392,3 +398,6 @@ private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
     val proj = Offset(a.x + ab.x * t, a.y + ab.y * t)
     return hypot(p.x - proj.x, p.y - proj.y)
 }
+
+/** Rayon de l'étiquette (pochette) par rapport à celui du disque. */
+private const val LABEL_RATIO = 0.34f

@@ -72,6 +72,7 @@ import io.github.inobody92.sillon.playback.PlayerUi
 import io.github.inobody92.sillon.playback.SleepState
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.PlayerVisual
+import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -148,7 +149,16 @@ fun NowPlayingScreen(
     onOpenQueue: () -> Unit,
     onAddToPlaylist: ((mediaId: String) -> Unit)?,
     onOpenEqualizer: () -> Unit,
+    /** Ouvre l'album du titre en cours (toucher la pochette ou le nom de l'album). Null : pas de navigation. */
+    onOpenAlbum: ((Album) -> Unit)? = null,
+    /** Ouvre la discographie de l'artiste du titre en cours (toucher son nom). */
+    onOpenArtist: ((String) -> Unit)? = null,
 ) {
+    val openAlbum: (() -> Unit)? = onOpenAlbum?.takeIf { ui.album.isNotBlank() }?.let { open ->
+        { open(Album(ui.album, ui.albumArtist, ui.artist, 0)) }
+    }
+    val artistName = ui.artist.ifBlank { ui.albumArtist }
+    val openArtist: (() -> Unit)? = onOpenArtist?.takeIf { artistName.isNotBlank() }?.let { open -> { open(artistName) } }
     var showSleepDialog by remember { mutableStateOf(false) }
     val position = rememberPosition(player, active = true)
     var dragging by remember { mutableStateOf(false) }
@@ -195,6 +205,7 @@ fun NowPlayingScreen(
                 durationMs = ui.durationMs,
                 onSeek = player::seekTo,
                 onTogglePlay = player::togglePlay,
+                onCoverClick = openAlbum,
                 modifier = modifier,
             )
         } else {
@@ -202,7 +213,8 @@ fun NowPlayingScreen(
                 url = ui.artwork,
                 imageLoader = imageLoader,
                 contentDescription = ui.album,
-                modifier = modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)),
+                modifier = modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp))
+                    .then(if (openAlbum != null) Modifier.clickable(onClick = openAlbum) else Modifier),
             )
         }
     }
@@ -222,6 +234,7 @@ fun NowPlayingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = if (openArtist != null) Modifier.clickable(onClick = openArtist) else Modifier,
                 )
             }
             if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
@@ -381,7 +394,9 @@ private fun RatingRow(client: SynoClient, mediaId: String) {
                     rating = next
                     scope.launch {
                         // En cas d'échec, on remet l'ancienne valeur plutôt que d'afficher une note fausse.
-                        runCatching { client.setRating(mediaId, next) }.onFailure { rating = previous }
+                        runCatching { client.setRating(mediaId, next) }
+                            .onSuccess { io.github.inobody92.sillon.data.TasteStore.onRated(null, mediaId, next) }
+                            .onFailure { rating = previous }
                     }
                 },
             ) {

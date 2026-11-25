@@ -50,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -281,15 +283,25 @@ fun PlaylistDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                CoverImage(
-                                    url = client.songCoverUrl(entry.song.id, withSid = true),
-                                    imageLoader = imageLoader,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
-                                )
+                                val nowPlaying = LocalNowPlaying.current
+                                val current = nowPlaying.isCurrent(entry.song.id)
+                                Box(contentAlignment = Alignment.Center) {
+                                    CoverImage(
+                                        url = client.songCoverUrl(entry.song.id, withSid = true),
+                                        imageLoader = imageLoader,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+                                    )
+                                    if (current) {
+                                        // Voile sombre pour que les barres restent lisibles sur n'importe quelle pochette.
+                                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.55f)))
+                                        NowPlayingBars(nowPlaying.isPlaying, Color.White)
+                                    }
+                                }
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         entry.song.title,
+                                        color = if (current) MaterialTheme.colorScheme.primary else Color.Unspecified,
                                         style = MaterialTheme.typography.bodyLarge,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,

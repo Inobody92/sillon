@@ -237,6 +237,23 @@ class SynoClient(val creds: Credentials) {
         return songTotal(null)
     }
 
+    /**
+     * Une page de la bibliothèque avec la note de chaque titre (0 = non noté). Sert au profil de goûts :
+     * on ne demande ni la durée ni le format, seulement les tags et la note.
+     */
+    suspend fun libraryRatingsPage(offset: Int, limit: Int): List<Pair<Song, Int>> {
+        val params = mapOf(
+            "offset" to "$offset", "limit" to "$limit", "library" to "all",
+            "additional" to "song_tag,song_rating",
+        )
+        val arr = call("SYNO.AudioStation.Song", "list", params = params).getJSONObject("data").optJSONArray("songs")
+            ?: return emptyList()
+        return List(arr.length()) { i ->
+            val o = arr.getJSONObject(i)
+            parseSong(o) to (o.optJSONObject("additional")?.optJSONObject("song_rating")?.optInt("rating", 0) ?: 0)
+        }
+    }
+
     private suspend fun songsPage(genre: String?, offset: Int, limit: Int): List<Song> {
         val params = mutableMapOf(
             "offset" to "$offset",
