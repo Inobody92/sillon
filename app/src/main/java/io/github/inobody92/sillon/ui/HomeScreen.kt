@@ -27,14 +27,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Celebration
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -72,13 +70,10 @@ import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.DailyMix
 import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.PlayHistory
-import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
-import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
-import io.github.inobody92.sillon.playback.PlayerUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -153,18 +148,12 @@ fun HomeScreen(
     libraryGenres: List<String>,
     onPlayMix: (List<Song>) -> Unit,
     onPlayRadio: (Mood) -> Unit,
-    playerUi: PlayerUi,
-    onResume: () -> Unit,
     onOpenAlbum: (Album) -> Unit,
-    onOpenDownloads: () -> Unit,
-    onOpenLiked: () -> Unit,
     onOpenAddMusic: (() -> Unit)?,
     onSettings: () -> Unit,
 ) {
     // L'historique change à chaque écoute : on le relit à chaque retour sur l'accueil.
     LaunchedEffect(Unit) { vm.refreshPlayed() }
-    val offline by OfflineStore.state.collectAsStateWithLifecycle()
-    val likes by Likes.state.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<Mood?>(null) }
@@ -177,95 +166,18 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Accueil") },
                 actions = {
+                    // Seulement si le serveur de téléchargement est configuré.
+                    if (onOpenAddMusic != null) {
+                        IconButton(onClick = onOpenAddMusic) { Icon(Icons.Filled.LibraryAdd, contentDescription = "Ajouter de la musique") }
+                    }
                     IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = "Réglages") }
                 },
             )
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
-            if (playerUi.hasItem && !playerUi.isPlaying) {
-                item(key = "resume") {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable(onClick = onResume),
-                    ) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                                Text("Reprendre", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    listOf(playerUi.title, playerUi.artist).filter { it.isNotBlank() }.joinToString(" · "),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
             item(key = "mix") {
                 MixCard(state, client, imageLoader, onPlay = { onPlayMix(state.mix) }, onRegenerate = { vm.load(true) }, onRetry = { vm.load(false) })
-            }
-            item(key = "offline") {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clickable(onClick = onOpenDownloads),
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                            Text("Hors-ligne", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                if (offline.songs.isEmpty() && offline.pendingCount == 0) {
-                                    "Télécharge des albums et des playlists"
-                                } else {
-                                    (if (offline.songs.size == 1) "1 titre" else "${offline.songs.size} titres") + " · ${formatBytes(offline.bytes)}" +
-                                        if (offline.pendingCount > 0) " · ${offline.pendingCount} en attente" else ""
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-            if (onOpenAddMusic != null) {
-                item(key = "add-music") {
-                    Card(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clickable(onClick = onOpenAddMusic)) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LibraryAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                                Text("Ajouter de la musique", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "Chercher une chanson ou un artiste et l'envoyer dans ta bibliothèque",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            item(key = "favorites") {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clickable(onClick = onOpenLiked),
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                            Text("Titres likés", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                when (likes.ids.size) {
-                                    0 -> "Touche le cœur d'un titre pour le retrouver ici"
-                                    1 -> "1 titre"
-                                    else -> "${likes.ids.size} titres"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
             }
             if (state.played.isNotEmpty()) {
                 item(key = "played") { AlbumRow("Écoutés récemment", state.played, client, imageLoader, onOpenAlbum) }

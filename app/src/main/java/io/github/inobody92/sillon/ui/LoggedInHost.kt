@@ -185,16 +185,6 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         genre = null
     }
 
-    fun openLiked() {
-        val id = Likes.state.value.playlistId
-        if (id == null || Likes.state.value.ids.isEmpty()) {
-            showMessage("Aucun titre liké : touche le cœur d'un titre")
-        } else {
-            album = null
-            playlist = Playlist(id, Likes.NAME)
-        }
-    }
-
     // Titres likés téléchargés automatiquement : chaque like ou retrait de like met la copie hors-ligne à jour.
     val likesState by Likes.state.collectAsStateWithLifecycle()
     val autoLikes by AppSettings.autoDownloadLikes.collectAsStateWithLifecycle()
@@ -429,11 +419,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             libraryGenres = browse.genres.map { it.name },
                             onPlayMix = { songs -> player.play(client, songs, 0) },
                             onPlayRadio = { mood -> player.playRadio(mood) },
-                            playerUi = playerUi,
-                            onResume = player::togglePlay,
                             onOpenAlbum = { album = it },
-                            onOpenDownloads = { showDownloads = true },
-                            onOpenLiked = ::openLiked,
                             onOpenAddMusic = if (downloadServer != null) ({ showAddMusic = true }) else null,
                             onSettings = { showSettings = true },
                         )
