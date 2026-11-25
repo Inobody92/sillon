@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,7 +93,7 @@ fun DownloadProgressScreen(vm: AddMusicViewModel, onClose: () -> Unit) {
                         item(key = "done-title") {
                             Text("Terminés récemment", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp))
                         }
-                        items(queue.finished, key = { "done-${it.number}@${it.finishedAt}" }) { FinishedRow(it, queue.finished.firstOrNull()?.finishedAt) }
+                        items(queue.finished, key = { "done-${it.number}@${it.finishedAt}" }) { FinishedRow(it, canRetry = vm.canRetry(it), onRetry = { vm.retry(it) }) }
                     }
                 }
             }
@@ -131,7 +132,7 @@ private fun TaskCard(task: RemoteTask, onCancel: (RemoteTask) -> Unit) {
 }
 
 @Composable
-private fun FinishedRow(f: RemoteFinished, @Suppress("UNUSED_PARAMETER") newest: Long?) {
+private fun FinishedRow(f: RemoteFinished, canRetry: Boolean, onRetry: () -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text(f.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
@@ -145,6 +146,7 @@ private fun FinishedRow(f: RemoteFinished, @Suppress("UNUSED_PARAMETER") newest:
             style = MaterialTheme.typography.bodySmall,
             color = if (f.status == "echec") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (canRetry) TextButton(onClick = onRetry) { Text("Réessayer") }
     }
 }
 

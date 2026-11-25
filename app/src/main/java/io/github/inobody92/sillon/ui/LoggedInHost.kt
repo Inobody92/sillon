@@ -508,7 +508,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
         downloadServer?.takeIf { showAddMusic }?.let { config ->
             val addMusicVm: AddMusicViewModel = viewModel(
                 key = "add-music-${config.hashCode()}",
-                factory = viewModelFactory { initializer { AddMusicViewModel(DownloadServerClient.create(config), client, onQueued = { n -> io.github.inobody92.sillon.data.DownloadWatch.watch(context.applicationContext, n) }) } },
+                factory = viewModelFactory { initializer { AddMusicViewModel(DownloadServerClient.create(config), client, onQueued = { n -> io.github.inobody92.sillon.data.DownloadWatch.watch(context.applicationContext, n) }, requests = io.github.inobody92.sillon.data.DownloadRequestLog(context)) } },
             )
             AddMusicScreen(
                 addMusicVm, imageLoader,

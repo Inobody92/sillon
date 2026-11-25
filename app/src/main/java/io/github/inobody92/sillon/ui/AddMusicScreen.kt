@@ -54,7 +54,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
+import io.github.inobody92.sillon.data.DownloadRequest
+import io.github.inobody92.sillon.data.DownloadRequestLog
 import io.github.inobody92.sillon.data.DownloadServerClient
+import io.github.inobody92.sillon.data.RemoteFinished
 import io.github.inobody92.sillon.data.DownloadServerException
 import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.QueuedTask
@@ -91,6 +94,8 @@ class AddMusicViewModel(
     private val library: SynoClient,
     /** Appelé avec le numéro de chaque demande acceptée par le serveur (pour la suivre en arrière-plan). */
     private val onQueued: (Int) -> Unit = {},
+    /** Mémoire des demandes, pour pouvoir relancer celles qui ont échoué ou ont été annulées. */
+    private val requests: DownloadRequestLog? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AddMusicState())
@@ -126,14 +131,30 @@ class AddMusicViewModel(
         }
     }
 
-    fun downloadSong(song: RemoteSong) = enqueue { server.downloadSong(song.id) }
-    fun downloadArtist(artist: RemoteArtist, count: Int) = enqueue { server.downloadArtist(artist.id, count) }
-    fun downloadLink(url: String) = enqueue { server.downloadLink(url.trim()) }
+    fun downloadSong(song: RemoteSong) = enqueue(DownloadRequest.Song(song.id))
+    fun downloadArtist(artist: RemoteArtist, count: Int) = enqueue(DownloadRequest.Artist(artist.id, count))
+    fun downloadLink(url: String) = enqueue(DownloadRequest.Link(url.trim()))
 
-    private fun enqueue(block: suspend () -> QueuedTask) {
+    /** Vrai si on se souvient de la demande derrière [finished] et qu'elle n'a pas abouti : un « Réessayer » a un sens. */
+    fun canRetry(finished: RemoteFinished): Boolean =
+        finished.status != "termine" && requests?.find(finished.number, finished.name) != null
+
+    fun retry(finished: RemoteFinished) {
+        val request = requests?.find(finished.number, finished.name) ?: return
+        enqueue(request, replacing = finished.number)
+    }
+
+    private fun enqueue(request: DownloadRequest, replacing: Int? = null) {
         viewModelScope.launch {
             try {
-                val task = block()
+                val task = when (request) {
+                    is DownloadRequest.Song -> server.downloadSong(request.id)
+                    is DownloadRequest.Artist -> server.downloadArtist(request.id, request.count)
+                    is DownloadRequest.Link -> server.downloadLink(request.url)
+                }
+                requests?.remember(task.number, task.name, request)
+                // L'ancienne tentative est remplacée par la nouvelle : plus de bouton ni de bandeau pour elle.
+                replacing?.let { requests?.forget(it) }
                 onQueued(task.number)
                 _messages.emit(
                     if (task.position == 0) "Téléchargement lancé : ${task.name}"
@@ -306,6 +327,11 @@ fun AddMusicScreen(
                 items(state.songs, key = { "song-${it.id}" }) { SongResult(it, imageLoader) { vm.downloadSong(it) } }
                 items(state.artists, key = { "artist-${it.id}" }) { ArtistResult(it, imageLoader) { choosing = it } }
 
+                // Échecs de demandes lancées depuis l'application et encore relançables : visibles ici, sans ouvrir le suivi.
+                val failed = state.queue?.finished.orEmpty().filter { it.status == "echec" && vm.canRetry(it) }
+                items(failed, key = { "failed-${it.number}@${it.finishedAt}" }) { f ->
+                    FailureCard(f, onRetry = { vm.retry(f) }, onOpenProgress = onOpenProgress)
+                }
                 item(key = "queue-banner") { QueueBanner(state, onOpenProgress) }
             }
         }
@@ -324,6 +350,27 @@ fun AddMusicScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun FailureCard(f: RemoteFinished, onRetry: () -> Unit, onOpenProgress: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Échec : ${f.name}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(
+                f.error ?: "Le serveur n'a pas donné de raison.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onRetry) { Text("Réessayer") }
+                TextButton(onClick = onOpenProgress) { Text("Voir le suivi") }
+            }
+        }
     }
 }
 
