@@ -216,6 +216,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
 
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
     LaunchedEffect(client) { Likes.sync(client); io.github.inobody92.sillon.data.Hidden.sync(client) }
+    LaunchedEffect(client) { io.github.inobody92.sillon.data.NasProfile.sync(client) }
     // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
     LaunchedEffect(client) {
         LibraryIndex.ensure(client)

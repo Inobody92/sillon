@@ -7,8 +7,10 @@ import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import java.security.SecureRandom
@@ -557,6 +559,90 @@ class SynoClient(val creds: Credentials) {
         }
     }
 
+    // --- Fichiers de l'utilisateur sur le NAS (File Station) ----------------------------------
+
+    private var fileSid: String? = null
+
+    /**
+     * File Station a sa propre session. Le sid d'Audio Station suffit à lister ou créer un dossier, mais l'envoi d'un
+     * fichier y est refusé (401) alors qu'il passe avec une session « FileStation » (vérifié sur le NAS réel).
+     */
+    private fun fileStationSid(renew: Boolean = false): String {
+        if (!renew) fileSid?.let { return it }
+        val params = mutableMapOf(
+            "account" to creds.account, "passwd" to creds.password, "session" to "FileStation", "format" to "sid",
+        )
+        deviceId?.let { params["device_id"] = it } // appareil de confiance : pas de nouveau code à deux facteurs
+        val json = post("SYNO.API.Auth", "login", params = params, withSid = false, raise = false)
+        if (!json.optBoolean("success")) throw ApiException(errorCode(json), "Connexion File Station impossible (code ${errorCode(json)})")
+        return json.getJSONObject("data").getString("sid").also { fileSid = it }
+    }
+
+    /** Écrit [data] dans [dir]/[name] sur le NAS (dossiers créés au besoin, fichier remplacé s'il existe). */
+    suspend fun nasFileWrite(dir: String, name: String, data: ByteArray) = withContext(Dispatchers.IO) {
+        val info = apis["SYNO.FileStation.Upload"] ?: throw ApiException(-1, "File Station absent du NAS")
+        // Corps multipart écrit à la main, tel que le fait curl : OkHttp ajoute un Content-Length dans chaque partie,
+        // ce que l'envoi de DSM ne comprend pas (401 après dix secondes d'attente).
+        val boundary = "----SillonBoundary" + System.nanoTime()
+        fun field(name: String, value: String) =
+            "--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray()
+        val payload = java.io.ByteArrayOutputStream().apply {
+            write(field("path", dir))
+            write(field("create_parents", "true"))
+            write(field("overwrite", "true"))
+            // Le fichier vient en dernier : File Station lit les paramètres qui le précèdent.
+            write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\nContent-Type: application/octet-stream\r\n\r\n".toByteArray())
+            write(data)
+            write("\r\n--$boundary--\r\n".toByteArray())
+        }.toByteArray()
+        fun attempt(session: String): JSONObject {
+            val url = webapiUrl(info.path).newBuilder()
+                .addQueryParameter("api", "SYNO.FileStation.Upload")
+                .addQueryParameter("version", "2")
+                .addQueryParameter("method", "upload")
+                .addQueryParameter("_sid", session)
+                .build()
+            val body = payload.toRequestBody("multipart/form-data; boundary=$boundary".toMediaType())
+            return execute(Request.Builder().url(url).post(body).build())
+        }
+        var json = attempt(fileStationSid())
+        if (!json.optBoolean("success") && errorCode(json) in FILE_SESSION_ERRORS) json = attempt(fileStationSid(renew = true))
+        if (!json.optBoolean("success")) throw ApiException(errorCode(json), "Écriture sur le NAS refusée (code ${errorCode(json)})")
+    }
+
+    /** Contenu de [path] sur le NAS, ou null si le fichier n'existe pas. */
+    suspend fun nasFileRead(path: String): ByteArray? = withContext(Dispatchers.IO) {
+        val info = apis["SYNO.FileStation.Download"] ?: throw ApiException(-1, "File Station absent du NAS")
+        fun attempt(session: String): ByteArray? {
+            val url = webapiUrl(info.path).newBuilder()
+                .addQueryParameter("api", "SYNO.FileStation.Download")
+                .addQueryParameter("version", "2")
+                .addQueryParameter("method", "download")
+                .addQueryParameter("path", path)
+                .addQueryParameter("mode", "download")
+                .addQueryParameter("_sid", session)
+                .build()
+            http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                if (resp.code == 404) return null // DSM répond 404 quand le fichier n'existe pas
+                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+                return resp.body?.bytes() ?: ByteArray(0)
+            }
+        }
+        // Une erreur arrive en JSON {"success":false,"error":{"code":…}} ; un fichier, tel quel.
+        fun errorOf(bytes: ByteArray): Int? {
+            if (bytes.firstOrNull() != '{'.code.toByte()) return null
+            val json = runCatching { JSONObject(String(bytes)) }.getOrNull() ?: return null
+            return if (json.has("success") && !json.optBoolean("success")) errorCode(json) else null
+        }
+        var bytes = attempt(fileStationSid() ) ?: return@withContext null
+        if (errorOf(bytes) in FILE_SESSION_ERRORS) bytes = attempt(fileStationSid(renew = true)) ?: return@withContext null
+        when (val err = errorOf(bytes)) {
+            null -> bytes
+            FILE_NOT_FOUND -> null
+            else -> throw ApiException(err, "Lecture sur le NAS refusée (code $err)")
+        }
+    }
+
     private fun webapiUrl(path: String): HttpUrl = "${creds.url}/webapi/$path".toHttpUrl()
 
     private fun discover() {
@@ -633,6 +719,8 @@ class SynoClient(val creds: Credentials) {
     companion object {
         private const val PLAYLIST = "SYNO.AudioStation.Playlist"
         private val SESSION_ERRORS = setOf(106, 107, 119)
+        private val FILE_SESSION_ERRORS = setOf(105, 106, 107, 119)
+        private const val FILE_NOT_FOUND = 408
         private const val ERROR_OTP_REQUIRED = 403
 
         /** Clé de cache stable pour une URL : on retire le sid, qui change à chaque connexion. */

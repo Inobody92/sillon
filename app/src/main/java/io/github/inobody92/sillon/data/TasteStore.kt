@@ -58,6 +58,7 @@ object TasteStore {
         file = File(appContext.filesDir, FILE)
         Likes.init(appContext)
         Hidden.init(appContext)
+        NasProfile.init(appContext)
         ListenStats.init(appContext)
         runCatching { load() }.onFailure { Log.w(TAG, "lecture impossible", it) }
         // Un like, un masquage ou l'index qui devient prêt changent le profil.
@@ -204,6 +205,25 @@ object ListenStats {
 
     fun snapshot(): Map<String, ListenCounts> = synchronized(lock) { cache.toMap() }
 
+    /** Reprend les statistiques sauvegardées sur le NAS : le plus grand compte de chaque sorte l'emporte. */
+    fun mergeFrom(remote: Map<String, ListenCounts>) {
+        synchronized(lock) {
+            val merged = NasProfile.mergeListen(cache, remote)
+            cache.clear()
+            cache.putAll(merged)
+            val copy = cache.toMap()
+            writer.launch { persist(copy) }
+        }
+    }
+
+    private fun persist(copy: Map<String, ListenCounts>) {
+        runCatching {
+            val json = JSONObject()
+            copy.forEach { (id, v) -> json.put(id, JSONArray(listOf(v.completes, v.skips))) }
+            appContext.openFileOutput(FILE, Context.MODE_PRIVATE).use { it.write(json.toString().toByteArray()) }
+        }
+    }
+
     fun record(songId: String, completed: Boolean) {
         synchronized(lock) {
             val c = cache[songId] ?: ListenCounts()
@@ -212,15 +232,10 @@ object ListenStats {
             while (cache.size > MAX_ENTRIES) cache.remove(cache.keys.first())
             val copy = cache.toMap()
             // Écriture hors du fil appelant (le service de lecture), une à la fois.
-            writer.launch {
-                runCatching {
-                    val json = JSONObject()
-                    copy.forEach { (id, v) -> json.put(id, JSONArray(listOf(v.completes, v.skips))) }
-                    appContext.openFileOutput(FILE, Context.MODE_PRIVATE).use { it.write(json.toString().toByteArray()) }
-                }
-            }
+            writer.launch { persist(copy) }
         }
         TasteStore.requestRebuild()
+        NasProfile.requestPush()
     }
 }
 
@@ -250,16 +265,30 @@ object ExposureStore {
         if (map.size > MAX_ENTRIES) {
             map.entries.sortedBy { it.value.lastMs }.take(map.size - MAX_ENTRIES).forEach { map.remove(it.key) }
         }
-        runCatching {
-            val json = JSONObject()
-            map.forEach { (id, e) -> json.put(id, JSONArray(listOf(e.count, e.lastMs))) }
-            context.applicationContext.openFileOutput(FILE, Context.MODE_PRIVATE).use { it.write(json.toString().toByteArray()) }
-        }
+        persist(context, map)
+        NasProfile.requestPush()
+    }
+
+    /** Reprend l'exposition sauvegardée sur le NAS : pour chaque titre, l'entrée la plus récente l'emporte. */
+    fun mergeFrom(context: Context, remote: Map<String, ExposureEntry>) = synchronized(lock) {
+        val map = load(context)
+        val merged = NasProfile.mergeExposure(map, remote)
+        map.clear()
+        map.putAll(merged)
+        persist(context, map)
     }
 
     fun clear(context: Context) = synchronized(lock) {
         cache = mutableMapOf()
         context.applicationContext.deleteFile(FILE)
+    }
+
+    private fun persist(context: Context, map: Map<String, ExposureEntry>) {
+        runCatching {
+            val json = JSONObject()
+            map.forEach { (id, e) -> json.put(id, JSONArray(listOf(e.count, e.lastMs))) }
+            context.applicationContext.openFileOutput(FILE, Context.MODE_PRIVATE).use { it.write(json.toString().toByteArray()) }
+        }
     }
 
     private fun load(context: Context): MutableMap<String, ExposureEntry> {

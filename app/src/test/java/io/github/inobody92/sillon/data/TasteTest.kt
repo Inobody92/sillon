@@ -108,3 +108,32 @@ class TasteTest {
         assertEquals(null, classifyListen(20_000, 40_000, automatic = false))
     }
 }
+
+class NasProfileTest {
+    @Test fun `le profil survit a l'ecriture et a la relecture`() {
+        val p = NasProfile.Profile(
+            exposure = mapOf("1" to ExposureEntry(3, 1_700_000_000_000L), "2" to ExposureEntry(1, 5L)),
+            listen = mapOf("1" to ListenCounts(2, 1)),
+        )
+        assertEquals(p, NasProfile.parse(NasProfile.serialize(p)))
+    }
+
+    @Test fun `un fichier illisible n'efface rien`() {
+        assertEquals(null, NasProfile.parse("pas du json"))
+    }
+
+    @Test fun `la fusion garde l'exposition la plus recente`() {
+        val local = mapOf("a" to ExposureEntry(5, 100L), "b" to ExposureEntry(1, 50L))
+        val remote = mapOf("a" to ExposureEntry(2, 200L), "c" to ExposureEntry(4, 10L))
+        val merged = NasProfile.mergeExposure(local, remote)
+        assertEquals(ExposureEntry(2, 200L), merged["a"]) // plus récent
+        assertEquals(ExposureEntry(1, 50L), merged["b"])
+        assertEquals(ExposureEntry(4, 10L), merged["c"])
+    }
+
+    @Test fun `la fusion des ecoutes prend le maximum sans double compte`() {
+        val merged = NasProfile.mergeListen(mapOf("a" to ListenCounts(3, 0)), mapOf("a" to ListenCounts(1, 2), "b" to ListenCounts(1, 0)))
+        assertEquals(ListenCounts(3, 2), merged["a"])
+        assertEquals(ListenCounts(1, 0), merged["b"])
+    }
+}
