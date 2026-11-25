@@ -43,15 +43,20 @@ object Hidden {
     fun init(context: Context) {
         if (::file.isInitialized) return
         file = File(context.applicationContext.filesDir, "hidden.json")
+        HiddenRules.init(context)
         load()
     }
 
+    /** Vrai si ce titre précis a été masqué (la liste « Titres masqués »). Les règles d'artiste et d'album : [isHiddenSong]. */
     fun isHidden(songId: String) = songId in _state.value.ids
+
+    /** Vrai si le titre est masqué, par lui-même ou par une règle sur son artiste ou son album. */
+    fun isHiddenSong(song: Song) = song.id in _state.value.ids || HiddenRules.matches(song)
 
     /** Titres de [songs] qui ne sont pas masqués. */
     fun visible(songs: List<Song>): List<Song> {
         val hidden = _state.value.ids
-        return if (hidden.isEmpty()) songs else songs.filter { it.id !in hidden }
+        return if (hidden.isEmpty() && HiddenRules.active.isEmpty()) songs else songs.filter { !isHiddenSong(it) }
     }
 
     /** Masque ou démasque. Instantané à l'écran ; le NAS suit, et on revient en arrière s'il refuse. */

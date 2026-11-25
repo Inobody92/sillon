@@ -137,3 +137,43 @@ class NasProfileTest {
         assertEquals(ListenCounts(1, 0), merged["b"])
     }
 }
+
+class HiddenRulesTest {
+    private val scorpions = artistRule("Scorpions", now = 100)
+    private val album = albumRule(Album("Lovedrive", "Scorpions", "Scorpions", 1979), now = 100)
+
+    @Test fun `une regle d'artiste vise tous ses titres, meme invites ou casse differente`() {
+        assertTrue(matchesRule(listOf(scorpions), "Scorpions", "", "Lovedrive"))
+        assertTrue(matchesRule(listOf(scorpions), "SCORPIONS", "", "x"))
+        assertTrue(matchesRule(listOf(scorpions), "Scorpions feat. Autre", "Scorpions", "Album")) // l'artiste de l'album l'emporte
+        assertTrue(!matchesRule(listOf(scorpions), "Metallica", "", "Lovedrive"))
+    }
+
+    @Test fun `une regle d'album ne vise pas les autres albums du meme artiste`() {
+        assertTrue(matchesRule(listOf(album), "Scorpions", "Scorpions", "lovedrive"))
+        assertTrue(!matchesRule(listOf(album), "Scorpions", "Scorpions", "Blackout"))
+        assertTrue(!matchesRule(listOf(album), "Autre", "Autre", "Lovedrive")) // même nom d'album, autre artiste
+    }
+
+    @Test fun `une regle retiree ne masque plus rien`() {
+        assertTrue(!matchesRule(listOf(scorpions.copy(on = false)), "Scorpions", "", "x"))
+    }
+
+    @Test fun `la fusion garde la modification la plus recente, y compris un retrait`() {
+        val local = mapOf(scorpions.id to scorpions) // posée à 100
+        val removedLater = mapOf(scorpions.id to scorpions.copy(on = false, updatedAt = 200))
+        assertEquals(false, mergeRules(local, removedLater)[scorpions.id]?.on)
+        val removedEarlier = mapOf(scorpions.id to scorpions.copy(on = false, updatedAt = 50))
+        assertEquals(true, mergeRules(local, removedEarlier)[scorpions.id]?.on)
+    }
+
+    @Test fun `les regles survivent au fichier du NAS`() {
+        val p = NasProfile.Profile(emptyMap(), emptyMap(), mapOf(scorpions.id to scorpions, album.id to album))
+        assertEquals(p, NasProfile.parse(NasProfile.serialize(p)))
+    }
+
+    @Test fun `un ancien fichier sans regles se lit toujours`() {
+        val old = """{"version":1,"exposure":{"1":[2,5]},"listen":{}}"""
+        assertEquals(emptyMap<String, HideRule>(), NasProfile.parse(old)?.rules)
+    }
+}

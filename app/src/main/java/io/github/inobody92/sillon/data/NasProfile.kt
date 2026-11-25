@@ -48,11 +48,12 @@ object NasProfile {
                     if (remote != null) {
                         ExposureStore.mergeFrom(appContext, remote.exposure)
                         ListenStats.mergeFrom(remote.listen)
+                        HiddenRules.mergeFrom(remote.rules)
                         TasteStore.requestRebuild()
                     }
                     val after = snapshot()
                     // On écrit si le fichier n'existe pas encore, ou s'il manque quelque chose par rapport à nous.
-                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen) {
+                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen || remote.rules != after.rules) {
                         client.nasFileWrite(DIR, NAME, serialize(after).toByteArray())
                         Log.i(TAG, "profil écrit sur le NAS (${after.exposure.size} expositions, ${after.listen.size} écoutes)")
                     } else {
@@ -81,16 +82,22 @@ object NasProfile {
         }
     }
 
-    internal data class Profile(val exposure: Map<String, ExposureEntry>, val listen: Map<String, ListenCounts>)
+    internal data class Profile(
+        val exposure: Map<String, ExposureEntry>,
+        val listen: Map<String, ListenCounts>,
+        val rules: Map<String, HideRule> = emptyMap(),
+    )
 
-    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot())
+    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot(), HiddenRules.snapshot())
 
     internal fun serialize(p: Profile): String {
         val exposure = JSONObject()
         p.exposure.forEach { (id, e) -> exposure.put(id, JSONArray(listOf(e.count, e.lastMs))) }
         val listen = JSONObject()
         p.listen.forEach { (id, l) -> listen.put(id, JSONArray(listOf(l.completes, l.skips))) }
-        return JSONObject().put("version", 1).put("exposure", exposure).put("listen", listen).toString()
+        val rules = JSONArray()
+        p.rules.values.forEach { rules.put(HiddenRules.encode(it)) }
+        return JSONObject().put("version", 1).put("exposure", exposure).put("listen", listen).put("rules", rules).toString()
     }
 
     internal fun parse(text: String): Profile? = runCatching {
@@ -99,7 +106,9 @@ object NasProfile {
         json.optJSONObject("exposure")?.let { o -> o.keys().forEach { k -> o.getJSONArray(k).let { exposure[k] = ExposureEntry(it.getInt(0), it.getLong(1)) } } }
         val listen = HashMap<String, ListenCounts>()
         json.optJSONObject("listen")?.let { o -> o.keys().forEach { k -> o.getJSONArray(k).let { listen[k] = ListenCounts(it.getInt(0), it.getInt(1)) } } }
-        Profile(exposure, listen)
+        val rules = HashMap<String, HideRule>()
+        json.optJSONArray("rules")?.let { a -> for (i in 0 until a.length()) HiddenRules.decode(a.getJSONArray(i))?.let { rules[it.id] = it } }
+        Profile(exposure, listen, rules)
     }.getOrNull()
 
     /** Fusion de deux expositions : l'entrée la plus récente l'emporte (à date égale, le plus grand compte). */

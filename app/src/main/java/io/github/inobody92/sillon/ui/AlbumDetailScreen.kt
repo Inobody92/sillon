@@ -124,6 +124,13 @@ fun AlbumDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
+                actions = {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Plus d'options") }
+                        HideRulesMenu(menu, { menu = false }, album = album, artistName = album.displayArtist)
+                    }
+                },
             )
         },
     ) { padding ->
@@ -271,7 +278,7 @@ private fun SongRow(
     client: SynoClient?,
 ) {
     var menu by remember { mutableStateOf(false) }
-    val hidden = rememberIsHidden(song.id)
+    val hidden = rememberIsSongHidden(song)
     Row(
         // Un titre masqué reste lisible (touché à la main) mais grisé : il est sauté partout ailleurs.
         Modifier.fillMaxWidth().alpha(if (hidden) 0.4f else 1f).clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),

@@ -242,14 +242,31 @@ fun NowPlayingScreen(
             if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
             if (ui.mediaId.isNotBlank() && client != null) {
                 val hidden = rememberIsHidden(ui.mediaId)
-                IconButton(onClick = {
-                    Hidden.toggle(client, ui.mediaId)
-                    if (!hidden) player.removeCurrent() // on passe au titre suivant tout de suite
-                }) {
-                    Icon(
-                        Icons.Filled.VisibilityOff,
-                        contentDescription = if (hidden) "Ne plus masquer ce titre" else "Masquer ce titre : ne plus jamais l'écouter",
-                        tint = if (hidden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(
+                            Icons.Filled.VisibilityOff,
+                            contentDescription = "Masquer : ne plus jamais l'écouter",
+                            tint = if (hidden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HideRulesMenu(
+                        expanded = menu,
+                        onDismiss = { menu = false },
+                        album = Album(ui.album, ui.albumArtist, ui.artist, 0),
+                        artistName = ui.albumArtist.ifBlank { ui.artist },
+                        extraItems = {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(if (hidden) "Ne plus masquer ce titre" else "Masquer ce titre") },
+                                onClick = {
+                                    menu = false
+                                    Hidden.toggle(client, ui.mediaId)
+                                    if (!hidden) player.removeCurrent() // on passe au titre suivant tout de suite
+                                },
+                            )
+                        },
+                        onHidden = { player.removeCurrent() },
                     )
                 }
             }

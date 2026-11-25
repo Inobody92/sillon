@@ -104,9 +104,9 @@ class PlayerController(context: Context) {
         // Les titres masqués ne sont pas mis en file. Le titre touché à la main fait exception (demande explicite),
         // sauf pour « tout lire » / « aléatoire » ([keepStart] faux) où personne n'a choisi de titre précis.
         val start = startIndex.coerceIn(songs.indices)
-        val kept = songs.filterIndexed { i, s -> (keepStart && i == start) || !Hidden.isHidden(s.id) }
+        val kept = songs.filterIndexed { i, s -> (keepStart && i == start) || !Hidden.isHiddenSong(s) }
         if (kept.isEmpty()) return
-        val keptStart = if (keepStart) (0 until start).count { !Hidden.isHidden(songs[it].id) } else 0
+        val keptStart = if (keepStart) (0 until start).count { !Hidden.isHiddenSong(songs[it]) } else 0
         val items = itemsFor(client, kept, album)
         withController {
             it.setMediaItems(items, keptStart.coerceIn(items.indices), 0L)

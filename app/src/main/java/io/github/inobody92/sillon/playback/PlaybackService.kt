@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.widget.WidgetUpdater
 import io.github.inobody92.sillon.data.Hidden
+import io.github.inobody92.sillon.data.HiddenRules
 import io.github.inobody92.sillon.data.Likes
 import io.github.inobody92.sillon.data.ListenEvent
 import io.github.inobody92.sillon.data.ListenStats
@@ -183,7 +184,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaItem?.mediaId?.takeIf { it.isNotBlank() }?.let { PlayHistory.record(applicationContext, it) }
                 // Un titre masqué après avoir été mis en file : on ne l'entend pas. Un titre choisi à la main
                 // (changement de liste de lecture) est lu quand même, c'est une demande explicite.
-                if (mediaItem != null && Hidden.isHidden(mediaItem.mediaId) &&
+                if (mediaItem != null && isHiddenItem(mediaItem) &&
                     (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
                 ) {
                     if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.pause()
@@ -410,6 +411,13 @@ class PlaybackService : MediaLibraryService() {
 
     private fun buildItems(saved: SavedQueue, client: io.github.inobody92.sillon.data.SynoClient?): List<MediaItem> =
         saved.items.map { MediaItems.song(it.song, null, MediaItems.artwork(client, it.song), it.parent, it.radio) }
+
+    /** Titre masqué (lui-même ou par une règle sur son artiste ou son album). */
+    private fun isHiddenItem(item: MediaItem): Boolean {
+        val md = item.mediaMetadata
+        return Hidden.isHidden(item.mediaId) ||
+            HiddenRules.matches(md.artist?.toString().orEmpty(), md.albumArtist?.toString().orEmpty(), md.albumTitle?.toString().orEmpty())
+    }
 
     /** Radio sans fin : ajoute des titres quand il en reste moins de cinq après celui en cours. */
     private fun maybeRefillRadio(player: Player) {

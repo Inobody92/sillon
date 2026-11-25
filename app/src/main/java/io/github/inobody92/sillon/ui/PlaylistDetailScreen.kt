@@ -276,7 +276,7 @@ fun PlaylistDetailScreen(
                             tonalElevation = if (isDragging) 6.dp else 0.dp,
                             shadowElevation = if (isDragging) 6.dp else 0.dp,
                         ) {
-                            val hidden = rememberIsHidden(entry.song.id)
+                            val hidden = rememberIsSongHidden(entry.song)
                             Row(
                                 Modifier
                                     .fillMaxWidth()
