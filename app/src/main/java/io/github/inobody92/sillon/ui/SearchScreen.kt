@@ -312,6 +312,7 @@ private fun SongSearchRow(
                 DropdownMenuItem(text = { Text("Lire ensuite") }, onClick = { menu = false; onPlayNext() })
                 DropdownMenuItem(text = { Text("Ajouter à la file") }, onClick = { menu = false; onAddToQueue() })
                 DropdownMenuItem(text = { Text("Ajouter à une playlist") }, onClick = { menu = false; onAddToPlaylist() })
+                HideMenuItem(song.id, client) { menu = false }
             }
         }
     }

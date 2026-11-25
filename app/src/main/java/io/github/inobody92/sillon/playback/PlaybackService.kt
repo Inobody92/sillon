@@ -36,7 +36,12 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.widget.WidgetUpdater
+import io.github.inobody92.sillon.data.Hidden
 import io.github.inobody92.sillon.data.Likes
+import io.github.inobody92.sillon.data.ListenEvent
+import io.github.inobody92.sillon.data.ListenStats
+import io.github.inobody92.sillon.data.TasteStore
+import io.github.inobody92.sillon.data.classifyListen
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.SessionHolder
@@ -92,6 +97,7 @@ class PlaybackService : MediaLibraryService() {
         AppSettings.init(applicationContext)
         OfflineStore.init(applicationContext)
         Likes.init(applicationContext)
+        TasteStore.init(applicationContext) // goûts, titres masqués et statistiques d'écoute (aussi sans l'application ouverte)
         tree = LibraryTree(applicationContext)
 
         // Réutilise le client HTTP de la session (certificat auto-signé compris).
@@ -175,8 +181,26 @@ class PlaybackService : MediaLibraryService() {
                 prefetchNext(player)
                 // Historique d'écoute (local) : alimente le mix du jour et la radio.
                 mediaItem?.mediaId?.takeIf { it.isNotBlank() }?.let { PlayHistory.record(applicationContext, it) }
+                // Un titre masqué après avoir été mis en file : on ne l'entend pas. Un titre choisi à la main
+                // (changement de liste de lecture) est lu quand même, c'est une demande explicite.
+                if (mediaItem != null && Hidden.isHidden(mediaItem.mediaId) &&
+                    (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
+                ) {
+                    if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.pause()
+                }
                 maybeRefillRadio(player)
                 scheduleSave(player)
+            }
+
+            // Ce qu'on a écouté du titre qui se termine : fini (+) ou passé (−), pour affiner les goûts.
+            override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                val automatic = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
+                if (!automatic && reason != Player.DISCONTINUITY_REASON_SEEK) return
+                val item = old.mediaItem ?: return
+                if (!automatic && old.mediaItemIndex == new.mediaItemIndex) return // avance rapide dans le même titre
+                val id = item.mediaId.takeIf { it.isNotBlank() } ?: return
+                val event = classifyListen(old.positionMs, item.mediaMetadata.durationMs ?: 0L, automatic) ?: return
+                ListenStats.record(id, completed = event == ListenEvent.COMPLETED)
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {

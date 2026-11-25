@@ -58,15 +58,16 @@ fun TasteScreen(client: SynoClient, onClose: () -> Unit) {
                 },
             )
             Text(
-                if (profile.ratedCount == 0) "Aucun titre noté pour l'instant."
-                else "${plural(profile.ratedCount, "titre noté")} · moyenne ${"%.1f".format(profile.globalMean).replace('.', ',')} ★",
+                if (profile.ratedCount == 0) "Aucune note, aucun like pour l'instant."
+                else "${plural(profile.ratedCount, "titre noté ou liké")} · moyenne ${"%.1f".format(profile.globalMean).replace('.', ',')} ★",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text(
-                "Le mix du jour et les radios favorisent les artistes et les genres les mieux notés, " +
-                    "et reviennent moins souvent sur les titres déjà proposés. Note un titre depuis le lecteur.",
+                "Les notes, les likes (= 5 ★), les titres masqués (= 1 ★) et ce que tu écoutes jusqu'au bout ou passes vite " +
+                    "dessinent tes goûts. Le mix du jour et les radios favorisent les mieux notés et reviennent moins souvent " +
+                    "sur les titres déjà proposés.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -87,7 +88,11 @@ private fun AffinityRow(a: Affinity) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(a.name.ifBlank { "(sans nom)" }, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(plural(a.ratedCount, "titre") + " noté" + if (a.ratedCount > 1) "s" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val parts = listOfNotNull(
+                if (a.ratedCount > 0) plural(a.ratedCount, "titre") + " noté" + (if (a.ratedCount > 1) "s" else "") + " ou liké" + (if (a.ratedCount > 1) "s" else "") else null,
+                if (a.listenedCount > 0) plural(a.listenedCount, "titre") + " déduit" + (if (a.listenedCount > 1) "s" else "") + " de l'écoute" else null,
+            )
+            Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
             "%.1f ★".format(a.average).replace('.', ','),

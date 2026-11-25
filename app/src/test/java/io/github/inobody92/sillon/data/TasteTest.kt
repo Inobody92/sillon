@@ -12,12 +12,12 @@ class TasteTest {
     private fun rated(id: String, rating: Int, artist: String, genre: String = "Rock") = RatedSong(id, rating, artist, genre)
 
     @Test fun `sans note tout est neutre`() {
-        val p = TasteProfile(emptyList())
+        val p = TasteProfile.fromRatings(emptyList())
         assertEquals(1.0, p.weight(song("1", "A")), 1e-9)
     }
 
     @Test fun `un artiste adore pousse ses titres non notes`() {
-        val p = TasteProfile(List(6) { rated("a$it", 5, "Adoré", "Pop") } + List(6) { rated("b$it", 2, "Bof", "Metal") })
+        val p = TasteProfile.fromRatings(List(6) { rated("a$it", 5, "Adoré", "Pop") } + List(6) { rated("b$it", 2, "Bof", "Metal") })
         val loved = p.weight(song("x", "Adoré", "Pop"))
         val meh = p.weight(song("y", "Bof", "Metal"))
         assertTrue("$loved devrait dépasser $meh", loved > 1.5 * meh)
@@ -25,17 +25,38 @@ class TasteTest {
     }
 
     @Test fun `une seule note ne pese pas autant que plusieurs`() {
-        val p = TasteProfile(listOf(rated("1", 5, "Un seul")) + List(8) { rated("b$it", 4, "Régulier") } + List(8) { rated("c$it", 2, "Autre") })
+        val p = TasteProfile.fromRatings(listOf(rated("1", 5, "Un seul")) + List(8) { rated("b$it", 4, "Régulier") } + List(8) { rated("c$it", 2, "Autre") })
         assertTrue(p.artistAverage(normalizeKey("Régulier"))!! > p.artistAverage(normalizeKey("Un seul"))!!)
     }
 
     @Test fun `un titre a une etoile est quasiment ecarte`() {
-        val p = TasteProfile(listOf(rated("1", 1, "A"), rated("2", 5, "B")))
+        val p = TasteProfile.fromRatings(listOf(rated("1", 1, "A"), rated("2", 5, "B")))
         assertTrue(p.weight(song("1", "A")) < 0.2 * p.weight(song("2", "B")))
     }
 
+    @Test fun `un like vaut cinq etoiles et une ecoute pese moins qu'une note`() {
+        val like = TasteSignal("1", 5.0, 1.0, "Aimé", "Pop")
+        val listened = implicitSignal("2", completes = 2, skips = 0, artistName = "Écouté", genreName = "Pop")!!
+        assertTrue(listened.weight < like.weight)
+        assertTrue(listened.value in 3.5..4.5)
+        val p = TasteProfile(listOf(like, listened, TasteSignal("3", 2.0, 1.0, "Bof", "Metal")))
+        assertEquals(2, p.ratedCount) // le signal d'écoute n'est pas une note
+        assertTrue(p.weight(song("x", "Aimé", "Pop")) > p.weight(song("y", "Bof", "Metal")))
+    }
+
+    @Test fun `un titre passe plusieurs fois est tire vers le bas, sans etre ecarte`() {
+        val skipped = implicitSignal("1", completes = 0, skips = 3, artistName = "A", genreName = "Rock")!!
+        assertTrue(skipped.value < 1.7)
+        val p = TasteProfile(listOf(skipped, TasteSignal("2", 5.0, 1.0, "B", "Rock")))
+        assertTrue(p.weight(song("1", "A")) > 0.1 * p.weight(song("2", "B")))
+    }
+
+    @Test fun `aucun evenement d'ecoute, aucun signal`() {
+        assertEquals(null, implicitSignal("1", 0, 0, "A", "Rock"))
+    }
+
     @Test fun `les accents et la casse ne separent pas un artiste`() {
-        val p = TasteProfile(listOf(rated("1", 5, "Beyoncé"), rated("2", 5, "BEYONCE")))
+        val p = TasteProfile.fromRatings(listOf(rated("1", 5, "Beyoncé"), rated("2", 5, "BEYONCE")))
         assertEquals(1, p.artists().size)
         assertEquals(2, p.artists().first().ratedCount)
     }
@@ -69,5 +90,21 @@ class TasteTest {
     @Test fun `le tirage ne repete pas un element`() {
         val out = weightedSample((1..20).toList(), 20, Random(3), { it.toDouble() })
         assertEquals(20, out.toSet().size)
+    }
+
+    @Test fun `un enchainement automatique est un titre fini`() {
+        assertEquals(ListenEvent.COMPLETED, classifyListen(180_000, 180_000, automatic = true))
+        assertEquals(ListenEvent.COMPLETED, classifyListen(170_000, 180_000, automatic = false)) // presque fini, passé à la main
+    }
+
+    @Test fun `passer apres quelques secondes est un avis, pas avant`() {
+        assertEquals(null, classifyListen(1_500, 200_000, automatic = false)) // on cherche un titre
+        assertEquals(ListenEvent.SKIPPED, classifyListen(12_000, 200_000, automatic = false))
+        assertEquals(null, classifyListen(90_000, 200_000, automatic = false)) // écouté longtemps : pas d'avis net
+    }
+
+    @Test fun `un titre court est jugé sur sa duree`() {
+        assertEquals(ListenEvent.SKIPPED, classifyListen(5_000, 40_000, automatic = false))
+        assertEquals(null, classifyListen(20_000, 40_000, automatic = false))
     }
 }

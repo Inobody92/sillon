@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
@@ -275,9 +276,11 @@ fun PlaylistDetailScreen(
                             tonalElevation = if (isDragging) 6.dp else 0.dp,
                             shadowElevation = if (isDragging) 6.dp else 0.dp,
                         ) {
+                            val hidden = rememberIsHidden(entry.song.id)
                             Row(
                                 Modifier
                                     .fillMaxWidth()
+                                    .alpha(if (hidden) 0.4f else 1f)
                                     .clickable { onPlay(songs, index) }
                                     .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -329,6 +332,7 @@ fun PlaylistDetailScreen(
                                             text = { Text("Ajouter à la file") },
                                             onClick = { menu = false; onAddToQueue(entry.song) },
                                         )
+                                        HideMenuItem(entry.song.id, client) { menu = false }
                                         DropdownMenuItem(
                                             text = { Text("Retirer de la playlist") },
                                             onClick = {

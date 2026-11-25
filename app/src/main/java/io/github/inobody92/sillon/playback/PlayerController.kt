@@ -12,6 +12,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import io.github.inobody92.sillon.data.Album
+import io.github.inobody92.sillon.data.Hidden
 import io.github.inobody92.sillon.data.OfflineStore
 import io.github.inobody92.sillon.data.Song
 import io.github.inobody92.sillon.data.SynoClient
@@ -82,6 +83,9 @@ class PlayerController(context: Context) {
         )
     }
 
+    /** Titres à mettre en file : sans les masqués, sauf quand on en ajoute un seul à la main. */
+    private fun queueable(songs: List<Song>): List<Song> = if (songs.size == 1) songs else Hidden.visible(songs)
+
     private fun itemsFor(client: SynoClient?, songs: List<Song>, album: Album?): List<MediaItem> {
         val albumArtwork = album?.let { client?.coverUrl(it, withSid = true) }?.let(Uri::parse)
         return songs.map { song ->
@@ -95,11 +99,17 @@ class PlayerController(context: Context) {
      * Lance la lecture de [songs] à partir de l'index [startIndex].
      * Si [album] est fourni, sa pochette sert pour tous les morceaux ; sinon, celle de chaque morceau.
      */
-    fun play(client: SynoClient?, songs: List<Song>, startIndex: Int, album: Album? = null) {
+    fun play(client: SynoClient?, songs: List<Song>, startIndex: Int, album: Album? = null, keepStart: Boolean = true) {
         if (songs.isEmpty()) return
-        val items = itemsFor(client, songs, album)
+        // Les titres masqués ne sont pas mis en file. Le titre touché à la main fait exception (demande explicite),
+        // sauf pour « tout lire » / « aléatoire » ([keepStart] faux) où personne n'a choisi de titre précis.
+        val start = startIndex.coerceIn(songs.indices)
+        val kept = songs.filterIndexed { i, s -> (keepStart && i == start) || !Hidden.isHidden(s.id) }
+        if (kept.isEmpty()) return
+        val keptStart = if (keepStart) (0 until start).count { !Hidden.isHidden(songs[it].id) } else 0
+        val items = itemsFor(client, kept, album)
         withController {
-            it.setMediaItems(items, startIndex.coerceIn(items.indices), 0L)
+            it.setMediaItems(items, keptStart.coerceIn(items.indices), 0L)
             it.prepare()
             it.play()
         }
@@ -107,8 +117,8 @@ class PlayerController(context: Context) {
 
     /** Insère [songs] juste après le morceau en cours (ou lance la lecture si la file est vide). */
     fun playNext(client: SynoClient?, songs: List<Song>, album: Album? = null) {
-        if (songs.isEmpty()) return
-        val items = itemsFor(client, songs, album)
+        val items = itemsFor(client, queueable(songs), album)
+        if (items.isEmpty()) return
         withController {
             if (it.mediaItemCount == 0) {
                 it.setMediaItems(items)
@@ -122,8 +132,8 @@ class PlayerController(context: Context) {
 
     /** Ajoute [songs] en fin de file (ou lance la lecture si la file est vide). */
     fun addToQueue(client: SynoClient?, songs: List<Song>, album: Album? = null) {
-        if (songs.isEmpty()) return
-        val items = itemsFor(client, songs, album)
+        val items = itemsFor(client, queueable(songs), album)
+        if (items.isEmpty()) return
         withController {
             if (it.mediaItemCount == 0) {
                 it.setMediaItems(items)
@@ -150,6 +160,11 @@ class PlayerController(context: Context) {
             it.seekTo(index, 0L)
             it.play()
         }
+    }
+
+    /** Retire le titre en cours de la file : le suivant démarre tout seul (utile quand on vient de le masquer). */
+    fun removeCurrent() = withController {
+        if (it.mediaItemCount > 0) it.removeMediaItem(it.currentMediaItemIndex)
     }
 
     fun removeFromQueue(index: Int) = withController {

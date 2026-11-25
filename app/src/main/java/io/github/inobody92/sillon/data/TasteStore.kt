@@ -7,7 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -22,20 +27,24 @@ import java.io.File
 data class TasteState(val profile: TasteProfile = TasteProfile(emptyList()), val loading: Boolean = false, val loadedAt: Long = 0L)
 
 /**
- * Notes de la bibliothèque et profil de goûts, gardés sur le téléphone. Les notes viennent du NAS (relues au plus
- * une fois toutes les [REFRESH_MS]) ; une note donnée dans l'application est prise en compte tout de suite.
+ * Notes de la bibliothèque et profil de goûts, gardés sur le téléphone. Le profil mêle, du plus fort au plus faible :
+ * les notes (relues sur le NAS au plus une fois toutes les [REFRESH_MS]), les likes (= 5 étoiles), les titres masqués
+ * (= 1 étoile) et l'écoute (titres écoutés en entier, titres passés).
  */
 object TasteStore {
 
     private const val FILE = "taste_ratings.json"
     private const val PAGE = 500
     private const val REFRESH_MS = 6L * 3600_000L
+    private const val REBUILD_DELAY_MS = 4_000L
     private const val TAG = "SillonTaste"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
     private lateinit var file: File
+    private lateinit var appContext: Context
     private var rated: MutableMap<String, RatedSong> = mutableMapOf()
+    private var rebuildJob: Job? = null
 
     private val _state = MutableStateFlow(TasteState())
     val state: StateFlow<TasteState> = _state.asStateFlow()
@@ -45,8 +54,29 @@ object TasteStore {
     @Synchronized
     fun init(context: Context) {
         if (::file.isInitialized) return
-        file = File(context.applicationContext.filesDir, FILE)
+        appContext = context.applicationContext
+        file = File(appContext.filesDir, FILE)
+        Likes.init(appContext)
+        Hidden.init(appContext)
+        ListenStats.init(appContext)
         runCatching { load() }.onFailure { Log.w(TAG, "lecture impossible", it) }
+        // Un like, un masquage ou l'index qui devient prêt changent le profil.
+        scope.launch {
+            combine(
+                Likes.state.map { it.ids }.distinctUntilChanged(),
+                Hidden.state.map { it.ids }.distinctUntilChanged(),
+                LibraryIndex.state.map { it.ready }.distinctUntilChanged(),
+            ) { _, _, _ -> }.collect { requestRebuild() }
+        }
+    }
+
+    /** Recalcule le profil bientôt (regroupe les demandes rapprochées : une écoute, un like…). */
+    fun requestRebuild() {
+        rebuildJob?.cancel()
+        rebuildJob = scope.launch {
+            delay(REBUILD_DELAY_MS)
+            lock.withLock { publish(_state.value.loadedAt) }
+        }
     }
 
     /** Relit les notes du NAS si elles datent de plus de [REFRESH_MS] (ou si [force]). */
@@ -100,8 +130,26 @@ object TasteStore {
         }
     }
 
+    /** Construit les signaux : notes > likes > masqués > écoute, un seul par titre. */
+    private fun signals(): List<TasteSignal> {
+        val out = ArrayList<TasteSignal>()
+        rated.values.forEach { out.add(TasteSignal(it.id, it.rating.toDouble(), TasteTuning.EXPLICIT_WEIGHT, it.artistName, it.genreName)) }
+        val taken = rated.keys.toMutableSet()
+        val liked = Likes.state.value.ids.filter { taken.add(it) }
+        val hidden = Hidden.state.value.ids.filter { taken.add(it) }
+        val listens = ListenStats.snapshot().filterKeys { it !in taken }
+        val infos = LibraryIndex.songsByIds(liked + hidden + listens.keys).associateBy { it.id }
+        liked.forEach { id -> infos[id]?.let { out.add(TasteSignal(id, 5.0, TasteTuning.EXPLICIT_WEIGHT, artistName(it), it.genre.trim())) } }
+        hidden.forEach { id -> infos[id]?.let { out.add(TasteSignal(id, 1.0, TasteTuning.EXPLICIT_WEIGHT, artistName(it), it.genre.trim())) } }
+        listens.forEach { (id, l) ->
+            val song = infos[id] ?: return@forEach
+            implicitSignal(id, l.completes, l.skips, artistName(song), song.genre.trim())?.let { out.add(it) }
+        }
+        return out
+    }
+
     private fun publish(at: Long) {
-        _state.value = TasteState(TasteProfile(rated.values.toList()), loading = false, loadedAt = at)
+        _state.value = TasteState(TasteProfile(signals()), loading = false, loadedAt = at)
     }
 
     private fun save() {
@@ -124,6 +172,55 @@ object TasteStore {
             }
         }
         publish(json.optLong("at"))
+    }
+}
+
+/** Titres écoutés en entier et titres passés, par titre. Local à l'appareil, comme l'historique d'écoute. */
+data class ListenCounts(val completes: Int = 0, val skips: Int = 0)
+
+object ListenStats {
+
+    private const val FILE = "listen_stats.json"
+    private const val MAX_ENTRIES = 5000
+    private val lock = Any()
+    private val writer = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private lateinit var appContext: Context
+    private var cache: MutableMap<String, ListenCounts> = mutableMapOf()
+
+    @Synchronized
+    fun init(context: Context) {
+        if (::appContext.isInitialized) return
+        appContext = context.applicationContext
+        synchronized(lock) {
+            runCatching {
+                val f = appContext.getFileStreamPath(FILE)
+                if (f.exists()) {
+                    val json = JSONObject(f.readText())
+                    json.keys().forEach { k -> json.getJSONArray(k).let { cache[k] = ListenCounts(it.getInt(0), it.getInt(1)) } }
+                }
+            }
+        }
+    }
+
+    fun snapshot(): Map<String, ListenCounts> = synchronized(lock) { cache.toMap() }
+
+    fun record(songId: String, completed: Boolean) {
+        synchronized(lock) {
+            val c = cache[songId] ?: ListenCounts()
+            cache.remove(songId) // réinséré en dernier : les plus anciens sortent en premier
+            cache[songId] = if (completed) c.copy(completes = c.completes + 1) else c.copy(skips = c.skips + 1)
+            while (cache.size > MAX_ENTRIES) cache.remove(cache.keys.first())
+            val copy = cache.toMap()
+            // Écriture hors du fil appelant (le service de lecture), une à la fois.
+            writer.launch {
+                runCatching {
+                    val json = JSONObject()
+                    copy.forEach { (id, v) -> json.put(id, JSONArray(listOf(v.completes, v.skips))) }
+                    appContext.openFileOutput(FILE, Context.MODE_PRIVATE).use { it.write(json.toString().toByteArray()) }
+                }
+            }
+        }
+        TasteStore.requestRebuild()
     }
 }
 

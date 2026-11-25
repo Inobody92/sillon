@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -270,8 +271,10 @@ private fun SongRow(
     client: SynoClient?,
 ) {
     var menu by remember { mutableStateOf(false) }
+    val hidden = rememberIsHidden(song.id)
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        // Un titre masqué reste lisible (touché à la main) mais grisé : il est sauté partout ailleurs.
+        Modifier.fillMaxWidth().alpha(if (hidden) 0.4f else 1f).clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -326,6 +329,7 @@ private fun SongRow(
                 DropdownMenuItem(text = { Text("Lire ensuite") }, onClick = { menu = false; onPlayNext() })
                 DropdownMenuItem(text = { Text("Ajouter à la file") }, onClick = { menu = false; onAddToQueue() })
                 DropdownMenuItem(text = { Text("Ajouter à une playlist") }, onClick = { menu = false; onAdd() })
+                HideMenuItem(song.id, client) { menu = false }
             }
         }
     }

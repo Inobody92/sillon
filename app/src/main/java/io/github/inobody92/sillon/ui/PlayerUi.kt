@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -73,6 +74,7 @@ import io.github.inobody92.sillon.playback.SleepState
 import io.github.inobody92.sillon.data.AppSettings
 import io.github.inobody92.sillon.data.PlayerVisual
 import io.github.inobody92.sillon.data.Album
+import io.github.inobody92.sillon.data.Hidden
 import io.github.inobody92.sillon.data.SynoClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -238,6 +240,19 @@ fun NowPlayingScreen(
                 )
             }
             if (ui.mediaId.isNotBlank()) LikeButton(ui.mediaId, client)
+            if (ui.mediaId.isNotBlank() && client != null) {
+                val hidden = rememberIsHidden(ui.mediaId)
+                IconButton(onClick = {
+                    Hidden.toggle(client, ui.mediaId)
+                    if (!hidden) player.removeCurrent() // on passe au titre suivant tout de suite
+                }) {
+                    Icon(
+                        Icons.Filled.VisibilityOff,
+                        contentDescription = if (hidden) "Ne plus masquer ce titre" else "Masquer ce titre : ne plus jamais l'écouter",
+                        tint = if (hidden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         if (client != null && ui.mediaId.isNotBlank()) {
             RatingRow(client, ui.mediaId)

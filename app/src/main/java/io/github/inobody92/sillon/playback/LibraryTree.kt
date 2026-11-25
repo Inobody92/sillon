@@ -9,6 +9,7 @@ import io.github.inobody92.sillon.data.DailyMix
 import io.github.inobody92.sillon.data.Mood
 import io.github.inobody92.sillon.data.MoodStore
 import io.github.inobody92.sillon.data.ExposureStore
+import io.github.inobody92.sillon.data.Hidden
 import io.github.inobody92.sillon.data.LibraryIndex
 import io.github.inobody92.sillon.data.PlayHistory
 import io.github.inobody92.sillon.data.SongWeigher
@@ -102,12 +103,12 @@ class LibraryTree(private val context: Context) {
             mediaId.startsWith("radio:") -> radioBatch(mediaId.removePrefix("radio:"), RADIO_START)
             mediaId.startsWith("album:") -> {
                 val album = decodeAlbum(mediaId) ?: return null
-                c.songs(album).map { songItem(it, album, mediaId) }
+                Hidden.visible(c.songs(album)).map { songItem(it, album, mediaId) }
             }
             mediaId.startsWith("playlist:") ->
-                c.playlistSongs(Uri.decode(mediaId.removePrefix("playlist:"))).map { songItem(it, null, mediaId) }
+                Hidden.visible(c.playlistSongs(Uri.decode(mediaId.removePrefix("playlist:")))).map { songItem(it, null, mediaId) }
             mediaId.startsWith("artist:") ->
-                c.songsByArtist(Uri.decode(mediaId.removePrefix("artist:"))).map { songItem(it, null, mediaId) }
+                Hidden.visible(c.songsByArtist(Uri.decode(mediaId.removePrefix("artist:")))).map { songItem(it, null, mediaId) }
             else -> null
         }
     }
@@ -125,7 +126,7 @@ class LibraryTree(private val context: Context) {
         // Aucun genre correspondant : la radio puise dans toute la bibliothèque plutôt que de rester muette.
         val wanted = genres.map { normalizeKey(it) }.toSet()
         val fromIndex = LibraryIndex.allSongs().filter { wanted.isEmpty() || normalizeKey(it.genre) in wanted }
-        val pool = fromIndex.ifEmpty { c.randomSongs(count * 6, genres.ifEmpty { null }, random) }
+        val pool = Hidden.visible(fromIndex.ifEmpty { c.randomSongs(count * 6, genres.ifEmpty { null }, random) })
         val chosen = weightedSample(
             pool.filter { it.id !in exclude }, count, random,
             weight = weigher::weight, group = ::artistKey, maxPerGroup = TasteTuning.MAX_PER_ARTIST,

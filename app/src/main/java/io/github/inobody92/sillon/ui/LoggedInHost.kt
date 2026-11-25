@@ -114,6 +114,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showDownloads by rememberSaveable { mutableStateOf(false) }
     var showTaste by rememberSaveable { mutableStateOf(false) }
+    var showHidden by rememberSaveable { mutableStateOf(false) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
     var showAddMusic by rememberSaveable { mutableStateOf(false) }
     var showProgress by rememberSaveable { mutableStateOf(false) }
@@ -169,6 +170,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showAddMusic && !showProgress) { showAddMusic = false }
     BackHandler(enabled = showProgress) { showProgress = false }
+    BackHandler(enabled = showHidden) { showHidden = false }
     BackHandler(enabled = showTaste) { showTaste = false }
     BackHandler(enabled = showDownloads) { showDownloads = false }
     BackHandler(enabled = showSettings && !showDownloads && !showEqualizer) { showSettings = false }
@@ -213,13 +215,14 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     }
 
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
-    LaunchedEffect(client) { Likes.sync(client) }
+    LaunchedEffect(client) { Likes.sync(client); io.github.inobody92.sillon.data.Hidden.sync(client) }
     // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
     LaunchedEffect(client) {
         LibraryIndex.ensure(client)
         io.github.inobody92.sillon.data.TasteStore.refresh(client)
     }
     LaunchedEffect(Unit) { Likes.errors.collect { showMessage(it) } }
+    LaunchedEffect(Unit) { io.github.inobody92.sillon.data.Hidden.errors.collect { showMessage(it) } }
 
     // Playlists téléchargées : si elles ont changé sur le NAS depuis la dernière fois, on les remet à jour.
     LaunchedEffect(client) {
@@ -286,7 +289,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 if (songs.isEmpty()) {
                     showMessage("Aucun titre pour $name")
                 } else {
-                    player.play(client, if (shuffle) songs.shuffled() else songs, 0)
+                    player.play(client, if (shuffle) songs.shuffled() else songs, 0, keepStart = false)
                 }
             } catch (e: Exception) {
                 showMessage(e.message ?: "Impossible de charger les titres")
@@ -352,7 +355,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             player.addToQueue(client, songs, currentAlbum)
                             queueMessage(songs.size, "ajouté à la file")
                         },
-                        onShuffle = { songs -> player.play(client, songs.shuffled(), 0, currentAlbum) },
+                        onShuffle = { songs -> player.play(client, songs.shuffled(), 0, currentAlbum, keepStart = false) },
                         onToggleDownload = { toggleAlbumDownload(currentAlbum) },
                     )
                     currentPlaylist != null -> PlaylistDetailScreen(
@@ -517,6 +520,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 onClose = { showSettings = false },
                 onOpenDownloads = { showDownloads = true },
                 onOpenTaste = { showTaste = true },
+                onOpenHidden = { showHidden = true },
                 onOpenEqualizer = { showEqualizer = true },
                 onLogout = { showSettings = false; onLogout() },
             )
@@ -536,6 +540,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             )
             if (showProgress) DownloadProgressScreen(addMusicVm, onClose = { showProgress = false })
         }
+        if (showHidden) HiddenScreen(client = client, onClose = { showHidden = false })
         if (showTaste) TasteScreen(client = client, onClose = { showTaste = false })
         if (showDownloads) {
             DownloadsScreen(

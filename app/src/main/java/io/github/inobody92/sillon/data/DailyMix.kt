@@ -20,6 +20,7 @@ object DailyMix {
         context.applicationContext.getSharedPreferences("sillon_mix", Context.MODE_PRIVATE)
 
     suspend fun get(context: Context, client: SynoClient, regenerate: Boolean = false): List<Song> {
+        TasteStore.init(context) // charge aussi les titres masqués
         val prefs = prefs(context)
         val today = LocalDate.now().toString()
         val owner = client.creds.url + "|" + client.creds.account
@@ -27,7 +28,8 @@ object DailyMix {
         if (!regenerate && prefs.getString("owner", null) == owner && prefs.getString("date", null) == today) {
             val saved = prefs.getString("songs", null)
             if (saved != null) {
-                val songs = runCatching { songsFromJson(JSONArray(saved)) }.getOrDefault(emptyList())
+                // Un titre masqué depuis la génération du mix en est retiré.
+                val songs = Hidden.visible(runCatching { songsFromJson(JSONArray(saved)) }.getOrDefault(emptyList()))
                 if (songs.isNotEmpty()) return songs
             }
         }
@@ -35,12 +37,11 @@ object DailyMix {
         // Graine = jour + compte : même sélection toute la journée, différente demain.
         val seed = if (regenerate) System.nanoTime() else (today + owner).hashCode().toLong()
         val recent = PlayHistory.recent(context, RECENT_DAYS)
-        TasteStore.init(context)
         val weigher = SongWeigher(context, recent)
         val random = Random(seed)
         // Toute la bibliothèque est candidate quand l'index est prêt ; sinon un échantillon aléatoire du NAS.
         val library = LibraryIndex.allSongs()
-        val candidates = library.ifEmpty { client.randomSongs(SIZE * 6, null, random) }
+        val candidates = Hidden.visible(library.ifEmpty { client.randomSongs(SIZE * 6, null, random) })
         val chosen = weightedSample(
             candidates, SIZE, random,
             weight = weigher::weight, group = ::artistKey, maxPerGroup = TasteTuning.MAX_PER_ARTIST,

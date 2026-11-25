@@ -58,6 +58,7 @@ fun SettingsScreen(
     onClose: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenTaste: () -> Unit,
+    onOpenHidden: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -211,6 +212,9 @@ fun SettingsScreen(
 
                 OutlinedButton(onClick = onOpenTaste, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text("Mes goûts (notes par artiste et genre)")
+                }
+                OutlinedButton(onClick = onOpenHidden, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Titres masqués")
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

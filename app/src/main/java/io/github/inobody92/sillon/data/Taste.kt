@@ -37,6 +37,15 @@ object TasteTuning {
     /** Un titre écouté récemment (jours de l'historique d'écoute) a ce facteur de chances. */
     const val RECENT_PLAY_FACTOR = 0.25
 
+    /** Une note, un like ou un titre masqué pèsent plein pot ; une écoute seule (titre fini, titre passé) beaucoup moins. */
+    const val EXPLICIT_WEIGHT = 1.0
+    const val IMPLICIT_WEIGHT_PER_EVENT = 0.2
+    const val IMPLICIT_WEIGHT_MAX = 0.6
+
+    /** Un titre écouté en entier compte pour cette hausse de note estimée, un titre passé pour cette baisse (plafonnées). */
+    const val COMPLETE_BONUS = 0.5
+    const val SKIP_PENALTY = 0.8
+
     /** Nombre maximal de titres d'un même artiste dans une sélection : évite qu'un favori occupe tout le mix. */
     const val MAX_PER_ARTIST = 3
 }
@@ -49,71 +58,115 @@ fun artistKey(song: Song): String = normalizeKey(song.albumArtist.ifBlank { song
 fun artistName(song: Song): String = song.albumArtist.ifBlank { song.artist }.trim()
 fun genreKey(song: Song): String = normalizeKey(song.genre)
 
-/** Un titre noté, avec ce qu'il faut pour calculer les moyennes. */
-data class RatedSong(val id: String, val rating: Int, val artistName: String, val genreName: String) {
+/** Un titre noté (1 à 5), avec ce qu'il faut pour calculer les moyennes. */
+data class RatedSong(val id: String, val rating: Int, val artistName: String, val genreName: String)
+
+/**
+ * Ce qu'on sait du goût de l'utilisateur pour un titre : une valeur de 1 à 5 et la confiance qu'on lui accorde
+ * ([weight], 1 = une vraie note). Viennent d'une note, d'un like (= 5), d'un titre masqué (= 1) ou de l'écoute.
+ */
+data class TasteSignal(val id: String, val value: Double, val weight: Double, val artistName: String, val genreName: String) {
     val artistKey get() = normalizeKey(artistName)
     val genreKey get() = normalizeKey(genreName)
+    val explicit get() = weight >= TasteTuning.EXPLICIT_WEIGHT
 }
 
-/** Moyenne lissée d'un artiste ou d'un genre. */
-data class Affinity(val name: String, val average: Double, val ratedCount: Int)
+/** Valeur et poids déduits de l'écoute seule : titres écoutés en entier ([completes]) et titres passés ([skips]). */
+fun implicitSignal(id: String, completes: Int, skips: Int, artistName: String, genreName: String): TasteSignal? {
+    if (completes + skips <= 0) return null
+    val value = (3.0 + TasteTuning.COMPLETE_BONUS * minOf(completes, 4) - TasteTuning.SKIP_PENALTY * minOf(skips, 3)).coerceIn(1.0, 5.0)
+    val weight = minOf(TasteTuning.IMPLICIT_WEIGHT_MAX, TasteTuning.IMPLICIT_WEIGHT_PER_EVENT * (completes + skips))
+    return TasteSignal(id, value, weight, artistName, genreName)
+}
 
-class TasteProfile(rated: List<RatedSong>) {
+/** Moyenne lissée d'un artiste ou d'un genre. [ratedCount] : titres notés, likés ou masqués ; [listenedCount] : titres connus par l'écoute seule. */
+data class Affinity(val name: String, val average: Double, val ratedCount: Int, val listenedCount: Int = 0)
 
-    private val ratings: Map<String, Int> = rated.associate { it.id to it.rating }
-    val globalMean: Double = if (rated.isEmpty()) NEUTRAL else rated.sumOf { it.rating }.toDouble() / rated.size
-    val ratedCount: Int get() = ratings.size
+class TasteProfile(signals: List<TasteSignal>) {
 
-    private val artistStats = group(rated, { it.artistKey }, { it.artistName })
-    private val genreStats = group(rated, { it.genreKey }, { it.genreName })
+    private val byId: Map<String, TasteSignal> = signals.associateBy { it.id }
+    private val totalWeight = signals.sumOf { it.weight }
+    val globalMean: Double = if (totalWeight <= 0.0) NEUTRAL else signals.sumOf { it.value * it.weight } / totalWeight
 
-    private class Stat(val name: String, var sum: Int = 0, var count: Int = 0)
+    /** Titres notés, likés ou masqués (les écoutes seules ne comptent pas ici). */
+    val ratedCount: Int = signals.count { it.explicit }
 
-    private fun group(rated: List<RatedSong>, key: (RatedSong) -> String, name: (RatedSong) -> String): Map<String, Stat> {
+    private val artistStats = group(signals, { it.artistKey }, { it.artistName })
+    private val genreStats = group(signals, { it.genreKey }, { it.genreName })
+
+    private class Stat(val name: String, var sumWeighted: Double = 0.0, var sumWeight: Double = 0.0, var explicit: Int = 0, var implicit: Int = 0)
+
+    private fun group(signals: List<TasteSignal>, key: (TasteSignal) -> String, name: (TasteSignal) -> String): Map<String, Stat> {
         val map = HashMap<String, Stat>()
-        rated.forEach { r ->
-            val k = key(r)
+        signals.forEach { sig ->
+            val k = key(sig)
             if (k.isEmpty()) return@forEach
-            val s = map.getOrPut(k) { Stat(name(r).ifBlank { k }) }
-            s.sum += r.rating
-            s.count++
+            val s = map.getOrPut(k) { Stat(name(sig).ifBlank { k }) }
+            s.sumWeighted += sig.value * sig.weight
+            s.sumWeight += sig.weight
+            if (sig.explicit) s.explicit++ else s.implicit++
         }
         return map
     }
 
     private fun smoothed(s: Stat?): Double? =
-        s?.let { (it.sum + TasteTuning.PRIOR_WEIGHT * globalMean) / (it.count + TasteTuning.PRIOR_WEIGHT) }
+        s?.let { (it.sumWeighted + TasteTuning.PRIOR_WEIGHT * globalMean) / (it.sumWeight + TasteTuning.PRIOR_WEIGHT) }
 
     fun artistAverage(key: String): Double? = smoothed(artistStats[key])
     fun genreAverage(key: String): Double? = smoothed(genreStats[key])
 
-    /** Artistes notés, du mieux au moins bien noté. */
-    fun artists(): List<Affinity> = artistStats.values.map { Affinity(it.name, smoothed(it)!!, it.count) }
-        .sortedWith(compareByDescending<Affinity> { it.average }.thenByDescending { it.ratedCount })
+    private fun affinities(stats: Map<String, Stat>) = stats.values.map { Affinity(it.name, smoothed(it)!!, it.explicit, it.implicit) }
+        .sortedWith(compareByDescending<Affinity> { it.average }.thenByDescending { it.ratedCount + it.listenedCount })
 
-    fun genres(): List<Affinity> = genreStats.values.map { Affinity(it.name, smoothed(it)!!, it.count) }
-        .sortedWith(compareByDescending<Affinity> { it.average }.thenByDescending { it.ratedCount })
+    /** Artistes connus, du mieux au moins bien apprécié. */
+    fun artists(): List<Affinity> = affinities(artistStats)
+    fun genres(): List<Affinity> = affinities(genreStats)
 
-    /** Note estimée de 1 à 5 : celle du titre s'il est noté, mélangée à l'affinité de son artiste et de son genre. */
+    /** Note estimée de 1 à 5 : celle du titre s'il en a une, mélangée à l'affinité de son artiste et de son genre. */
     fun score(song: Song): Double {
         val a = artistAverage(artistKey(song)) ?: globalMean
         val g = genreAverage(genreKey(song)) ?: globalMean
         val affinity = TasteTuning.ARTIST_SHARE * a + (1 - TasteTuning.ARTIST_SHARE) * g
-        val own = ratings[song.id] ?: return affinity
-        return TasteTuning.OWN_RATING_SHARE * own + (1 - TasteTuning.OWN_RATING_SHARE) * affinity
+        val own = byId[song.id] ?: return affinity
+        val share = (TasteTuning.OWN_RATING_SHARE * own.weight).coerceIn(0.0, TasteTuning.OWN_RATING_SHARE)
+        return share * own.value + (1 - share) * affinity
     }
 
-    /** Poids de tirage lié aux goûts : 1 = neutre. Sans aucune note, tout vaut 1. */
+    /** Poids de tirage lié aux goûts : 1 = neutre. Sans aucun signal, tout vaut 1. */
     fun weight(song: Song): Double {
-        if (ratings.isEmpty()) return 1.0
+        if (byId.isEmpty()) return 1.0
         val w = exp(TasteTuning.STEEPNESS * (score(song) - NEUTRAL))
-        return if (ratings[song.id] == 1) w * TasteTuning.ONE_STAR_PENALTY else w
+        val own = byId[song.id]
+        return if (own != null && own.explicit && own.value <= 1.0) w * TasteTuning.ONE_STAR_PENALTY else w
     }
 
     companion object {
         const val NEUTRAL = 3.0
+
+        /** Profil construit à partir de notes seules. */
+        fun fromRatings(rated: List<RatedSong>) =
+            TasteProfile(rated.map { TasteSignal(it.id, it.rating.toDouble(), TasteTuning.EXPLICIT_WEIGHT, it.artistName, it.genreName) })
     }
 }
+
+/** Ce que l'écoute d'un titre nous apprend. */
+enum class ListenEvent { COMPLETED, SKIPPED }
+
+/**
+ * Qualifie la fin d'un titre à partir de ce qui a été écouté. Un titre fini (enchaînement automatique ou presque
+ * entièrement écouté) est un signe positif ; un titre passé à la main après quelques secondes est un signe négatif.
+ * Moins de [MIN_SKIP_MS] : on cherche simplement un titre, ce n'est pas un avis. Sans signification : null.
+ */
+fun classifyListen(positionMs: Long, durationMs: Long, automatic: Boolean): ListenEvent? {
+    if (automatic) return ListenEvent.COMPLETED
+    if (durationMs > 0 && positionMs >= (durationMs * 0.85).toLong()) return ListenEvent.COMPLETED
+    if (positionMs < MIN_SKIP_MS) return null
+    val limit = if (durationMs > 0) minOf(MAX_SKIP_MS, (durationMs * 0.4).toLong()) else MAX_SKIP_MS
+    return if (positionMs < limit) ListenEvent.SKIPPED else null
+}
+
+const val MIN_SKIP_MS = 4_000L
+const val MAX_SKIP_MS = 30_000L
 
 /** Combien de fois un titre est « tombé » dans une sélection, et quand pour la dernière fois. */
 data class ExposureEntry(val count: Int, val lastMs: Long)
