@@ -177,3 +177,17 @@ class HiddenRulesTest {
         assertEquals(emptyMap<String, HideRule>(), NasProfile.parse(old)?.rules)
     }
 }
+
+class AccentChoiceTest {
+    @Test fun `le choix de couleurs survit au fichier du NAS, y compris le retour a Sillon`() {
+        val custom = NasProfile.Profile(emptyMap(), emptyMap(), emptyMap(), AccentChoice(0xFF1E88E5.toInt(), 0xFFFFB300.toInt(), 1234L))
+        assertEquals(custom, NasProfile.parse(NasProfile.serialize(custom)))
+        val reset = NasProfile.Profile(emptyMap(), emptyMap(), emptyMap(), AccentChoice(null, null, 5678L))
+        assertEquals(reset, NasProfile.parse(NasProfile.serialize(reset)))
+    }
+
+    @Test fun `sans choix enregistre, rien n'est ecrit`() {
+        val none = NasProfile.Profile(emptyMap(), emptyMap())
+        assertEquals(null, NasProfile.parse(NasProfile.serialize(none))?.accent)
+    }
+}

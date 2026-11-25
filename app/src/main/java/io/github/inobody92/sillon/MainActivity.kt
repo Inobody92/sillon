@@ -100,7 +100,8 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             val dynamic by AppSettings.dynamicColors.collectAsStateWithLifecycle()
-            SillonTheme(dark, dynamicColors = dynamic) {
+            val accent by AppSettings.accent.collectAsStateWithLifecycle()
+            SillonTheme(dark, dynamicColors = dynamic, accent = accent) {
                 UpdatePrompt()
                 Surface(Modifier.fillMaxSize()) {
                     val state by viewModel.state.collectAsStateWithLifecycle()

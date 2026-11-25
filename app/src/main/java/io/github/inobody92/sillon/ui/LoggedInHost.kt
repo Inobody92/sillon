@@ -115,6 +115,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     var showDownloads by rememberSaveable { mutableStateOf(false) }
     var showTaste by rememberSaveable { mutableStateOf(false) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
+    var showTheme by rememberSaveable { mutableStateOf(false) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
     var showAddMusic by rememberSaveable { mutableStateOf(false) }
     var showProgress by rememberSaveable { mutableStateOf(false) }
@@ -170,6 +171,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     BackHandler(enabled = showEqualizer) { showEqualizer = false }
     BackHandler(enabled = showAddMusic && !showProgress) { showAddMusic = false }
     BackHandler(enabled = showProgress) { showProgress = false }
+    BackHandler(enabled = showTheme) { showTheme = false }
     BackHandler(enabled = showHidden) { showHidden = false }
     BackHandler(enabled = showTaste) { showTaste = false }
     BackHandler(enabled = showDownloads) { showDownloads = false }
@@ -522,6 +524,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                 onOpenDownloads = { showDownloads = true },
                 onOpenTaste = { showTaste = true },
                 onOpenHidden = { showHidden = true },
+                onOpenTheme = { showTheme = true },
                 onOpenEqualizer = { showEqualizer = true },
                 onLogout = { showSettings = false; onLogout() },
             )
@@ -541,6 +544,7 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
             )
             if (showProgress) DownloadProgressScreen(addMusicVm, onClose = { showProgress = false })
         }
+        if (showTheme) ThemeScreen(onClose = { showTheme = false })
         if (showHidden) HiddenScreen(client = client, onClose = { showHidden = false })
         if (showTaste) TasteScreen(client = client, onClose = { showTaste = false })
         if (showDownloads) {

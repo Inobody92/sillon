@@ -17,6 +17,14 @@ enum class PlayerVisual(val label: String) {
     COVER("Pochette"),
 }
 
+/**
+ * Couleurs d'accent choisies par l'utilisateur (ARGB), null = celles de Sillon. [updatedAt] sert à la synchronisation
+ * avec le NAS : la modification la plus récente l'emporte.
+ */
+data class AccentChoice(val primary: Int? = null, val secondary: Int? = null, val updatedAt: Long = 0L) {
+    val isCustom get() = primary != null
+}
+
 enum class ThemeMode(val label: String) {
     SYSTEM("Suivre le système"),
     LIGHT("Clair"),
@@ -68,6 +76,9 @@ object AppSettings {
     private val _dynamicColors = MutableStateFlow(false)
     val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
 
+    private val _accent = MutableStateFlow(AccentChoice())
+    val accent: StateFlow<AccentChoice> = _accent.asStateFlow()
+
     private val _autoDownloadLikes = MutableStateFlow(true)
     val autoDownloadLikes: StateFlow<Boolean> = _autoDownloadLikes.asStateFlow()
 
@@ -89,6 +100,11 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
+        _accent.value = AccentChoice(
+            primary = if (prefs.contains(K_ACCENT_PRIMARY)) prefs.getInt(K_ACCENT_PRIMARY, 0) else null,
+            secondary = if (prefs.contains(K_ACCENT_SECONDARY)) prefs.getInt(K_ACCENT_SECONDARY, 0) else null,
+            updatedAt = prefs.getLong(K_ACCENT_AT, 0L),
+        )
         _checkUpdates.value = prefs.getBoolean(K_CHECK_UPDATES, true)
         _eqEnabled.value = prefs.getBoolean(K_EQ_ON, false)
         _eqPreset.value = prefs.getString(K_EQ_PRESET, null) ?: EqPresets.NEUTRAL_ID
@@ -144,6 +160,28 @@ object AppSettings {
         prefs.edit().putString(K_EQ_PRESET, presetId).putString(K_EQ_GAINS, EqPresets.encode(gains)).apply()
     }
 
+    /** Choisit les couleurs d'accent (null = celles de Sillon). Envoyé au NAS avec le profil. */
+    fun setAccent(primary: Int?, secondary: Int?, now: Long = System.currentTimeMillis()) {
+        applyAccent(AccentChoice(primary, secondary, now))
+        NasProfile.requestPush()
+    }
+
+    /** Reprend le choix sauvegardé sur le NAS s'il est plus récent. Vrai si les couleurs ont changé ici. */
+    fun mergeAccent(remote: AccentChoice): Boolean {
+        if (remote.updatedAt <= _accent.value.updatedAt) return false
+        applyAccent(remote)
+        return true
+    }
+
+    private fun applyAccent(choice: AccentChoice) {
+        _accent.value = choice
+        prefs.edit().apply {
+            choice.primary?.let { putInt(K_ACCENT_PRIMARY, it) } ?: remove(K_ACCENT_PRIMARY)
+            choice.secondary?.let { putInt(K_ACCENT_SECONDARY, it) } ?: remove(K_ACCENT_SECONDARY)
+            putLong(K_ACCENT_AT, choice.updatedAt)
+        }.apply()
+    }
+
     fun setDynamicColors(value: Boolean) {
         _dynamicColors.value = value
         prefs.edit().putBoolean(K_DYNAMIC, value).apply()
@@ -192,6 +230,9 @@ object AppSettings {
     private const val K_CACHE_MB = "cache_max_mb"
     private const val K_AUTO_LIKES = "auto_download_likes"
     private const val K_DYNAMIC = "dynamic_colors"
+    private const val K_ACCENT_PRIMARY = "accent_primary"
+    private const val K_ACCENT_SECONDARY = "accent_secondary"
+    private const val K_ACCENT_AT = "accent_updated_at"
     private const val K_TURNTABLE = "turntable"
     private const val K_VISUAL = "player_visual"
     private const val K_CHECK_UPDATES = "check_updates"

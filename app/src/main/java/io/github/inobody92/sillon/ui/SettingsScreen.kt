@@ -59,6 +59,7 @@ fun SettingsScreen(
     onOpenDownloads: () -> Unit,
     onOpenTaste: () -> Unit,
     onOpenHidden: () -> Unit,
+    onOpenTheme: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -93,6 +94,9 @@ fun SettingsScreen(
                 Section("Apparence")
                 ThemeMode.entries.forEach { mode ->
                     OptionRow(mode.label, selected = theme == mode) { AppSettings.setTheme(mode) }
+                }
+                OutlinedButton(onClick = onOpenTheme, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Personnaliser les couleurs")
                 }
 
                 WidgetSection()

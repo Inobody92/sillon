@@ -99,18 +99,28 @@ internal val SillonLight = lightColorScheme(
     surfaceContainerHighest = Color(0xFFEADCDC),
 )
 
+/** Couleur principale de Sillon (thème clair) : pastille « Sillon » du choix de couleurs. */
+internal val SillonLightPrimary = Color(0xFF7B2432)
+
 /**
  * [dynamicColors] : reprend les couleurs du fond d'écran (Material You, Android 12+) au lieu de la palette
  * de Sillon. Désactivé par défaut : l'identité de l'application reste la même d'un téléphone à l'autre.
  */
 @Composable
-fun SillonTheme(dark: Boolean, dynamicColors: Boolean = false, content: @Composable () -> Unit) {
+fun SillonTheme(
+    dark: Boolean,
+    dynamicColors: Boolean = false,
+    accent: io.github.inobody92.sillon.data.AccentChoice = io.github.inobody92.sillon.data.AccentChoice(),
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
+    val base = if (dark) SillonDark else SillonLight
     val scheme = when {
         dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> SillonDark
-        else -> SillonLight
+        // Couleurs choisies par l'utilisateur : tout le reste (fonds, textes) en est déduit, contrastes garantis.
+        accent.primary != null -> customColorScheme(base, Color(accent.primary), accent.secondary?.let { Color(it) }, dark)
+        else -> base
     }
     MaterialTheme(colorScheme = scheme, content = content)
 }

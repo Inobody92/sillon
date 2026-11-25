@@ -49,11 +49,12 @@ object NasProfile {
                         ExposureStore.mergeFrom(appContext, remote.exposure)
                         ListenStats.mergeFrom(remote.listen)
                         HiddenRules.mergeFrom(remote.rules)
+                        remote.accent?.let { AppSettings.mergeAccent(it) }
                         TasteStore.requestRebuild()
                     }
                     val after = snapshot()
                     // On écrit si le fichier n'existe pas encore, ou s'il manque quelque chose par rapport à nous.
-                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen || remote.rules != after.rules) {
+                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen || remote.rules != after.rules || remote.accent != after.accent) {
                         client.nasFileWrite(DIR, NAME, serialize(after).toByteArray())
                         Log.i(TAG, "profil écrit sur le NAS (${after.exposure.size} expositions, ${after.listen.size} écoutes)")
                     } else {
@@ -86,9 +87,10 @@ object NasProfile {
         val exposure: Map<String, ExposureEntry>,
         val listen: Map<String, ListenCounts>,
         val rules: Map<String, HideRule> = emptyMap(),
+        val accent: AccentChoice? = null,
     )
 
-    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot(), HiddenRules.snapshot())
+    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot(), HiddenRules.snapshot(), AppSettings.accent.value.takeIf { it.updatedAt > 0 })
 
     internal fun serialize(p: Profile): String {
         val exposure = JSONObject()
@@ -97,7 +99,11 @@ object NasProfile {
         p.listen.forEach { (id, l) -> listen.put(id, JSONArray(listOf(l.completes, l.skips))) }
         val rules = JSONArray()
         p.rules.values.forEach { rules.put(HiddenRules.encode(it)) }
-        return JSONObject().put("version", 1).put("exposure", exposure).put("listen", listen).put("rules", rules).toString()
+        val json = JSONObject().put("version", 1).put("exposure", exposure).put("listen", listen).put("rules", rules)
+        p.accent?.let { a ->
+            json.put("theme", JSONObject().put("primary", a.primary ?: JSONObject.NULL).put("secondary", a.secondary ?: JSONObject.NULL).put("at", a.updatedAt))
+        }
+        return json.toString()
     }
 
     internal fun parse(text: String): Profile? = runCatching {
@@ -108,7 +114,14 @@ object NasProfile {
         json.optJSONObject("listen")?.let { o -> o.keys().forEach { k -> o.getJSONArray(k).let { listen[k] = ListenCounts(it.getInt(0), it.getInt(1)) } } }
         val rules = HashMap<String, HideRule>()
         json.optJSONArray("rules")?.let { a -> for (i in 0 until a.length()) HiddenRules.decode(a.getJSONArray(i))?.let { rules[it.id] = it } }
-        Profile(exposure, listen, rules)
+        val accent = json.optJSONObject("theme")?.let { t ->
+            AccentChoice(
+                primary = if (t.isNull("primary")) null else t.getInt("primary"),
+                secondary = if (t.isNull("secondary")) null else t.getInt("secondary"),
+                updatedAt = t.optLong("at"),
+            )
+        }
+        Profile(exposure, listen, rules, accent)
     }.getOrNull()
 
     /** Fusion de deux expositions : l'entrée la plus récente l'emporte (à date égale, le plus grand compte). */
