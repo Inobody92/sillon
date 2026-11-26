@@ -222,6 +222,28 @@ fun SettingsScreen(
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Section("Découvertes")
+                val discovery by AppSettings.discovery.collectAsStateWithLifecycle()
+                val discoveryNotify by AppSettings.discoveryNotify.collectAsStateWithLifecycle()
+                val context = androidx.compose.ui.platform.LocalContext.current
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Suggestions du jour", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Chaque jour : sorties récentes de tes artistes, artistes proches et pépites peu connues, à télécharger d'un geste. " +
+                                "Rien n'est téléchargé sans ton accord. Nécessite le serveur de téléchargement ; les noms de tes artistes " +
+                                "préférés sont envoyés à Deezer pour trouver des artistes proches.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = discovery, onCheckedChange = { AppSettings.setDiscovery(it); io.github.inobody92.sillon.data.DiscoveryScheduler.update(context) })
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Notification quotidienne", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Switch(checked = discoveryNotify && discovery, enabled = discovery, onCheckedChange = { AppSettings.setDiscoveryNotify(it) })
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 DownloadServerSection()
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

@@ -191,3 +191,16 @@ class AccentChoiceTest {
         assertEquals(null, NasProfile.parse(NasProfile.serialize(none))?.accent)
     }
 }
+
+class DiscoveryMemoryTest {
+    @Test fun `la memoire des decouvertes survit au fichier du NAS`() {
+        val memory = DiscoveryMemory(mapOf("artist:3" to 100L), mapOf("album:10" to 200L, "artist:3" to 150L))
+        val p = NasProfile.Profile(emptyMap(), emptyMap(), emptyMap(), null, memory)
+        assertEquals(p, NasProfile.parse(NasProfile.serialize(p)))
+    }
+
+    @Test fun `la fusion garde la date la plus recente de chaque cle`() {
+        val merged = DiscoveryStore.mergeMemory(mapOf("a" to 100L, "b" to 500L), mapOf("a" to 300L, "b" to 200L, "c" to 50L))
+        assertEquals(mapOf("a" to 300L, "b" to 500L, "c" to 50L), merged)
+    }
+}

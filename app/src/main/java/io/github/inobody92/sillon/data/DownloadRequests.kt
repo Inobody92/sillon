@@ -10,18 +10,21 @@ import org.json.JSONObject
  */
 sealed interface DownloadRequest {
     data class Song(val id: String) : DownloadRequest
+    data class Album(val id: String) : DownloadRequest
     data class Artist(val id: String, val count: Int) : DownloadRequest
     data class Link(val url: String) : DownloadRequest
 }
 
 internal fun DownloadRequest.toJson(): JSONObject = when (this) {
     is DownloadRequest.Song -> JSONObject().put("type", "song").put("id", id)
+    is DownloadRequest.Album -> JSONObject().put("type", "album").put("id", id)
     is DownloadRequest.Artist -> JSONObject().put("type", "artist").put("id", id).put("count", count)
     is DownloadRequest.Link -> JSONObject().put("type", "link").put("url", url)
 }
 
 internal fun downloadRequestFromJson(json: JSONObject): DownloadRequest? = when (json.optString("type")) {
     "song" -> json.optString("id").ifBlank { null }?.let { DownloadRequest.Song(it) }
+    "album" -> json.optString("id").ifBlank { null }?.let { DownloadRequest.Album(it) }
     "artist" -> json.optString("id").ifBlank { null }?.let { DownloadRequest.Artist(it, json.optInt("count")) }
     "link" -> json.optString("url").ifBlank { null }?.let { DownloadRequest.Link(it) }
     else -> null

@@ -8,6 +8,7 @@ class DownloadRequestTest {
     @Test fun `chaque type de demande survit a la serialisation`() {
         listOf(
             DownloadRequest.Song("123"),
+            DownloadRequest.Album("302127"),
             DownloadRequest.Artist("27", 10),
             DownloadRequest.Artist("27", 0),
             DownloadRequest.Link("https://youtu.be/abc"),

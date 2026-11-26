@@ -50,11 +50,12 @@ object NasProfile {
                         ListenStats.mergeFrom(remote.listen)
                         HiddenRules.mergeFrom(remote.rules)
                         remote.accent?.let { AppSettings.mergeAccent(it) }
+                        remote.discovery?.let { DiscoveryStore.mergeFrom(it) }
                         TasteStore.requestRebuild()
                     }
                     val after = snapshot()
                     // On écrit si le fichier n'existe pas encore, ou s'il manque quelque chose par rapport à nous.
-                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen || remote.rules != after.rules || remote.accent != after.accent) {
+                    if (remote == null || remote.exposure != after.exposure || remote.listen != after.listen || remote.rules != after.rules || remote.accent != after.accent || remote.discovery != after.discovery) {
                         client.nasFileWrite(DIR, NAME, serialize(after).toByteArray())
                         Log.i(TAG, "profil écrit sur le NAS (${after.exposure.size} expositions, ${after.listen.size} écoutes)")
                     } else {
@@ -88,9 +89,10 @@ object NasProfile {
         val listen: Map<String, ListenCounts>,
         val rules: Map<String, HideRule> = emptyMap(),
         val accent: AccentChoice? = null,
+        val discovery: DiscoveryMemory? = null,
     )
 
-    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot(), HiddenRules.snapshot(), AppSettings.accent.value.takeIf { it.updatedAt > 0 })
+    private fun snapshot() = Profile(ExposureStore.snapshot(appContext), ListenStats.snapshot(), HiddenRules.snapshot(), AppSettings.accent.value.takeIf { it.updatedAt > 0 }, DiscoveryStore.memory().takeIf { it.dismissed.isNotEmpty() || it.proposed.isNotEmpty() })
 
     internal fun serialize(p: Profile): String {
         val exposure = JSONObject()
@@ -102,6 +104,11 @@ object NasProfile {
         val json = JSONObject().put("version", 1).put("exposure", exposure).put("listen", listen).put("rules", rules)
         p.accent?.let { a ->
             json.put("theme", JSONObject().put("primary", a.primary ?: JSONObject.NULL).put("secondary", a.secondary ?: JSONObject.NULL).put("at", a.updatedAt))
+        }
+        p.discovery?.let { d ->
+            json.put("discovery", JSONObject()
+                .put("dismissed", JSONObject().also { o -> d.dismissed.forEach { (k, v) -> o.put(k, v) } })
+                .put("proposed", JSONObject().also { o -> d.proposed.forEach { (k, v) -> o.put(k, v) } }))
         }
         return json.toString()
     }
@@ -121,7 +128,11 @@ object NasProfile {
                 updatedAt = t.optLong("at"),
             )
         }
-        Profile(exposure, listen, rules, accent)
+        val discovery = json.optJSONObject("discovery")?.let { d ->
+            fun times(o: JSONObject?) = HashMap<String, Long>().also { m -> o?.keys()?.forEach { k -> m[k] = o.getLong(k) } }
+            DiscoveryMemory(times(d.optJSONObject("dismissed")), times(d.optJSONObject("proposed")))
+        }
+        Profile(exposure, listen, rules, accent, discovery)
     }.getOrNull()
 
     /** Fusion de deux expositions : l'entrée la plus récente l'emporte (à date égale, le plus grand compte). */

@@ -121,6 +121,8 @@ class DownloadServerClient(baseUrl: String, private val token: String, private v
 
     suspend fun downloadSong(id: String): QueuedTask = queued(obj("POST", "api/chansons", JSONObject().put("id", id)))
 
+    suspend fun downloadAlbum(id: String): QueuedTask = queued(obj("POST", "api/albums", JSONObject().put("id", id)))
+
     /** [count] = 0 : toute la discographie ; sinon les [count] titres les plus populaires. */
     suspend fun downloadArtist(id: String, count: Int): QueuedTask =
         queued(obj("POST", "api/artistes", JSONObject().put("id", id).put("nombre", count)))

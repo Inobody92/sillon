@@ -59,6 +59,15 @@ application neuve, écrite en Kotlin avec Jetpack Compose et Media3.
   d'artistes et les couleurs choisies sont enregistrées dans `/home/.sillon/profil.json` (dossier personnel de
   l'utilisateur, via File Station) : un nouveau téléphone ou une réinstallation reprennent où tu en étais
 
+**Découvertes du jour** (avec le serveur de téléchargement)
+- Chaque jour, 5 suggestions sur l'Accueil, à télécharger d'un geste (rien n'est téléchargé sans ton accord) : les
+  **sorties récentes** de tes artistes préférés, des **artistes proches**, et deux **pépites** peu connues (artistes
+  proches des tiens mais à moins de 100 000 fans, cherchés aussi à deux pas de tes favoris)
+- Calculées sur le téléphone à partir de tes goûts et de ta bibliothèque ; seuls les noms de tes artistes préférés
+  sont envoyés à Deezer (API publique) pour trouver des artistes proches. Écarté : ce que tu as déjà, ce que tu as
+  masqué, les rééditions, ce que tu as refusé (« Non merci ») ou qui a déjà été proposé récemment
+- Notification quotidienne facultative ; tout se règle dans Réglages → Découvertes
+
 **Thème**
 - Clair, sombre ou système ; couleurs du système (Material You, Android 12+) ; **couleurs personnalisées** :
   choix d'une couleur principale et d'une secondaire, les fonds en prennent la teinte et les contrastes de lecture

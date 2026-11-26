@@ -209,6 +209,13 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
     // « Titres likés » : synchronisation avec le NAS à chaque connexion, et affichage des erreurs éventuelles.
     LaunchedEffect(client) { Likes.sync(client); io.github.inobody92.sillon.data.Hidden.sync(client) }
     LaunchedEffect(client) { io.github.inobody92.sillon.data.NasProfile.sync(client) }
+    // Découvertes du jour : calculées à l'ouverture si ce n'est pas déjà fait, puis chaque jour en arrière-plan.
+    val discoveries by io.github.inobody92.sillon.data.DiscoveryStore.state.collectAsStateWithLifecycle()
+    val discoveryOn by AppSettings.discovery.collectAsStateWithLifecycle()
+    LaunchedEffect(downloadServer != null, discoveryOn) {
+        io.github.inobody92.sillon.data.DiscoveryScheduler.update(context)
+        io.github.inobody92.sillon.data.DiscoveryRunner.run(context)
+    }
     // Index de recherche : relu seulement si la bibliothèque a changé de taille ou s'il est ancien.
     LaunchedEffect(client) {
         LibraryIndex.ensure(client)
@@ -421,6 +428,13 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             onPlayRadio = { mood -> player.playRadio(mood) },
                             onOpenAlbum = { album = it },
                             onOpenAddMusic = if (downloadServer != null) ({ showAddMusic = true }) else null,
+                            suggestions = if (downloadServer != null) discoveries.suggestions else emptyList(),
+                            onDownloadSuggestion = { s -> scope.launch { showMessage(io.github.inobody92.sillon.data.DiscoveryActions.download(context, s)) } },
+                            onDismissSuggestion = { s -> io.github.inobody92.sillon.data.DiscoveryStore.dismiss(s) },
+                            onRefreshSuggestions = {
+                                showMessage("Recherche de nouvelles suggestions…")
+                                scope.launch { io.github.inobody92.sillon.data.DiscoveryRunner.run(context, force = true) }
+                            },
                             onSettings = { showSettings = true },
                         )
                     }

@@ -59,6 +59,7 @@ object TasteStore {
         Likes.init(appContext)
         Hidden.init(appContext)
         NasProfile.init(appContext)
+        DiscoveryStore.init(appContext)
         ListenStats.init(appContext)
         runCatching { load() }.onFailure { Log.w(TAG, "lecture impossible", it) }
         // Un like, un masquage ou l'index qui devient prêt changent le profil.

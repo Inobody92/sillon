@@ -150,6 +150,10 @@ fun HomeScreen(
     onPlayRadio: (Mood) -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenAddMusic: (() -> Unit)?,
+    suggestions: List<io.github.inobody92.sillon.data.Suggestion>,
+    onDownloadSuggestion: (io.github.inobody92.sillon.data.Suggestion) -> Unit,
+    onDismissSuggestion: (io.github.inobody92.sillon.data.Suggestion) -> Unit,
+    onRefreshSuggestions: () -> Unit,
     onSettings: () -> Unit,
 ) {
     // L'historique change à chaque écoute : on le relit à chaque retour sur l'accueil.
@@ -178,6 +182,9 @@ fun HomeScreen(
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
             item(key = "mix") {
                 MixCard(state, client, imageLoader, onPlay = { onPlayMix(state.mix) }, onRegenerate = { vm.load(true) }, onRetry = { vm.load(false) })
+            }
+            if (suggestions.isNotEmpty()) {
+                item(key = "discoveries") { DiscoverySection(suggestions, imageLoader, onDownloadSuggestion, onDismissSuggestion, onRefreshSuggestions) }
             }
             if (state.played.isNotEmpty()) {
                 item(key = "played") { AlbumRow("Écoutés récemment", state.played, client, imageLoader, onOpenAlbum) }

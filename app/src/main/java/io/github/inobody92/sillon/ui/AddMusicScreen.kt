@@ -149,6 +149,7 @@ class AddMusicViewModel(
             try {
                 val task = when (request) {
                     is DownloadRequest.Song -> server.downloadSong(request.id)
+                    is DownloadRequest.Album -> server.downloadAlbum(request.id)
                     is DownloadRequest.Artist -> server.downloadArtist(request.id, request.count)
                     is DownloadRequest.Link -> server.downloadLink(request.url)
                 }

@@ -79,6 +79,13 @@ object AppSettings {
     private val _accent = MutableStateFlow(AccentChoice())
     val accent: StateFlow<AccentChoice> = _accent.asStateFlow()
 
+    private val _discovery = MutableStateFlow(true)
+    /** Suggestions quotidiennes de musique à découvrir (nécessite le serveur de téléchargement). */
+    val discovery: StateFlow<Boolean> = _discovery.asStateFlow()
+
+    private val _discoveryNotify = MutableStateFlow(true)
+    val discoveryNotify: StateFlow<Boolean> = _discoveryNotify.asStateFlow()
+
     private val _autoDownloadLikes = MutableStateFlow(true)
     val autoDownloadLikes: StateFlow<Boolean> = _autoDownloadLikes.asStateFlow()
 
@@ -100,6 +107,8 @@ object AppSettings {
         _cacheMaxMb.value = prefs.getInt(K_CACHE_MB, 1024)
         _autoDownloadLikes.value = prefs.getBoolean(K_AUTO_LIKES, true)
         _dynamicColors.value = prefs.getBoolean(K_DYNAMIC, false)
+        _discovery.value = prefs.getBoolean(K_DISCOVERY, true)
+        _discoveryNotify.value = prefs.getBoolean(K_DISCOVERY_NOTIFY, true)
         _accent.value = AccentChoice(
             primary = if (prefs.contains(K_ACCENT_PRIMARY)) prefs.getInt(K_ACCENT_PRIMARY, 0) else null,
             secondary = if (prefs.contains(K_ACCENT_SECONDARY)) prefs.getInt(K_ACCENT_SECONDARY, 0) else null,
@@ -182,6 +191,16 @@ object AppSettings {
         }.apply()
     }
 
+    fun setDiscovery(value: Boolean) {
+        _discovery.value = value
+        prefs.edit().putBoolean(K_DISCOVERY, value).apply()
+    }
+
+    fun setDiscoveryNotify(value: Boolean) {
+        _discoveryNotify.value = value
+        prefs.edit().putBoolean(K_DISCOVERY_NOTIFY, value).apply()
+    }
+
     fun setDynamicColors(value: Boolean) {
         _dynamicColors.value = value
         prefs.edit().putBoolean(K_DYNAMIC, value).apply()
@@ -230,6 +249,8 @@ object AppSettings {
     private const val K_CACHE_MB = "cache_max_mb"
     private const val K_AUTO_LIKES = "auto_download_likes"
     private const val K_DYNAMIC = "dynamic_colors"
+    private const val K_DISCOVERY = "discovery"
+    private const val K_DISCOVERY_NOTIFY = "discovery_notify"
     private const val K_ACCENT_PRIMARY = "accent_primary"
     private const val K_ACCENT_SECONDARY = "accent_secondary"
     private const val K_ACCENT_AT = "accent_updated_at"
