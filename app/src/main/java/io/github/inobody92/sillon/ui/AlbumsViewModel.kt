@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.inobody92.sillon.data.Album
 import io.github.inobody92.sillon.data.SynoClient
+import io.github.inobody92.sillon.data.isTempDownloadAlbum
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +15,8 @@ data class AlbumsState(
     val albums: List<Album> = emptyList(),
     val loading: Boolean = false,
     val endReached: Boolean = false,
+    /** Albums reçus du NAS, y compris ceux qu'on n'affiche pas : c'est ce nombre, pas celui de la liste, qui fait avancer le défilement. */
+    val fetched: Int = 0,
     val error: String? = null,
 )
 
@@ -36,10 +39,11 @@ class AlbumsViewModel(
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                val page = client.albums(offset = s.albums.size, limit = PAGE_SIZE, artist = artist, genre = genre)
+                val page = client.albums(offset = s.fetched, limit = PAGE_SIZE, artist = artist, genre = genre)
                 _state.update {
                     it.copy(
-                        albums = it.albums + page,
+                        albums = it.albums + page.filterNot { a -> isTempDownloadAlbum(a.name) },
+                        fetched = it.fetched + page.size,
                         loading = false,
                         endReached = page.size < PAGE_SIZE,
                     )

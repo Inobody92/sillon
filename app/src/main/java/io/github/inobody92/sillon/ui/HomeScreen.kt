@@ -123,7 +123,7 @@ class HomeViewModel(app: Application, private val client: SynoClient) : AndroidV
     private fun loadAdded() {
         viewModelScope.launch {
             runCatching { client.albums(0, 15, sortBy = "time", sortDirection = "desc") }
-                .onSuccess { albums -> _state.update { it.copy(added = albums) } }
+                .onSuccess { albums -> _state.update { it.copy(added = albums.filterNot { a -> io.github.inobody92.sillon.data.isTempDownloadAlbum(a.name) }) } }
         }
     }
 
@@ -151,7 +151,8 @@ fun HomeScreen(
     onOpenAlbum: (Album) -> Unit,
     onOpenAddMusic: (() -> Unit)?,
     suggestions: List<io.github.inobody92.sillon.data.Suggestion>,
-    onDownloadSuggestion: (io.github.inobody92.sillon.data.Suggestion) -> Unit,
+    discoveriesEnabled: Boolean,
+    onDownloadSuggestion: (io.github.inobody92.sillon.data.Suggestion, Int) -> Unit,
     onDismissSuggestion: (io.github.inobody92.sillon.data.Suggestion) -> Unit,
     onRefreshSuggestions: () -> Unit,
     onSettings: () -> Unit,
@@ -183,7 +184,7 @@ fun HomeScreen(
             item(key = "mix") {
                 MixCard(state, client, imageLoader, onPlay = { onPlayMix(state.mix) }, onRegenerate = { vm.load(true) }, onRetry = { vm.load(false) })
             }
-            if (suggestions.isNotEmpty()) {
+            if (discoveriesEnabled || suggestions.isNotEmpty()) {
                 item(key = "discoveries") { DiscoverySection(suggestions, imageLoader, onDownloadSuggestion, onDismissSuggestion, onRefreshSuggestions) }
             }
             if (state.played.isNotEmpty()) {

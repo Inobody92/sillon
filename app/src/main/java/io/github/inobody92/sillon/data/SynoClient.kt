@@ -60,6 +60,15 @@ data class Song(
 
 data class Artist(val name: String)
 
+/**
+ * Le bot de téléchargement travaille dans un dossier `.telechargement` de la bibliothèque. Audio Station le voit pendant
+ * les téléchargements et en fait un faux album (faute de tag d'album, il prend le nom du dossier) qui peut rester
+ * affiché après le rangement. Cet « album » ne doit apparaître nulle part : ses fichiers peuvent être incomplets.
+ */
+const val TEMP_DOWNLOAD_ALBUM = ".telechargement"
+
+fun isTempDownloadAlbum(name: String) = name.trim() == TEMP_DOWNLOAD_ALBUM
+
 data class Genre(val name: String)
 
 data class Playlist(val id: String, val name: String) {

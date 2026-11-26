@@ -19,6 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,10 +36,14 @@ import io.github.inobody92.sillon.data.SuggestionKind
 fun DiscoverySection(
     suggestions: List<Suggestion>,
     imageLoader: ImageLoader,
-    onDownload: (Suggestion) -> Unit,
+    /** [count] : pour un artiste, 0 = toute la discographie, sinon les [count] titres les plus populaires ; ignoré pour un album. */
+    onDownload: (Suggestion, count: Int) -> Unit,
     onDismiss: (Suggestion) -> Unit,
     onRefresh: () -> Unit,
 ) {
+    var choosing by remember { mutableStateOf<Suggestion?>(null) }
+    // Une sortie se télécharge d'un geste ; pour un artiste, on demande quoi prendre.
+    val request = { s: Suggestion -> if (s.albumId != null) onDownload(s, 0) else choosing = s }
     Column(Modifier.padding(top = 24.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -51,9 +59,33 @@ fun DiscoverySection(
             }
         }
         androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 16.dp)) {
-            items(suggestions, key = { it.key }) { SuggestionCard(it, imageLoader, onDownload, onDismiss) }
+        if (suggestions.isEmpty()) {
+            Text(
+                "Tu as tout vu pour aujourd'hui. Touche ↻ pour d'autres suggestions.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 16.dp)) {
+                items(suggestions, key = { it.key }) { SuggestionCard(it, imageLoader, request, onDismiss) }
+            }
         }
+    }
+
+    choosing?.let { artist ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { choosing = null },
+            title = { Text("Télécharger ${artist.artist}") },
+            text = { Text("Les titres déjà présents dans ta bibliothèque sont sautés.") },
+            confirmButton = {
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    TextButton(onClick = { choosing = null; onDownload(artist, 0) }) { Text("Toute la discographie") }
+                    TextButton(onClick = { choosing = null; onDownload(artist, 10) }) { Text("Les 10 titres les plus populaires") }
+                    TextButton(onClick = { choosing = null }) { Text("Annuler") }
+                }
+            },
+        )
     }
 }
 

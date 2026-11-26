@@ -88,7 +88,9 @@ object LibraryIndex {
         save(songs)
     }
 
-    private fun publish(songs: List<Song>) {
+    private fun publish(all: List<Song>) {
+        // Rien de ce qui est dans le dossier d'attente du bot : ni recherche, ni mix, ni radio, ni découvertes.
+        val songs = all.filterNot { isTempDownloadAlbum(it.album) }
         engine = SearchEngine(songs)
         _state.value = IndexState(ready = true, building = false, size = songs.size)
     }

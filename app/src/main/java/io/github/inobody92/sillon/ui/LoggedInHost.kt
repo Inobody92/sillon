@@ -429,7 +429,8 @@ fun LoggedInHost(client: SynoClient, playerViewModel: PlayerViewModel, onLogout:
                             onOpenAlbum = { album = it },
                             onOpenAddMusic = if (downloadServer != null) ({ showAddMusic = true }) else null,
                             suggestions = if (downloadServer != null) discoveries.suggestions else emptyList(),
-                            onDownloadSuggestion = { s -> scope.launch { showMessage(io.github.inobody92.sillon.data.DiscoveryActions.download(context, s)) } },
+                            discoveriesEnabled = downloadServer != null && discoveryOn,
+                            onDownloadSuggestion = { s, n -> scope.launch { showMessage(io.github.inobody92.sillon.data.DiscoveryActions.download(context, s, n)) } },
                             onDismissSuggestion = { s -> io.github.inobody92.sillon.data.DiscoveryStore.dismiss(s) },
                             onRefreshSuggestions = {
                                 showMessage("Recherche de nouvelles suggestions…")

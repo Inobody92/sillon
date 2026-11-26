@@ -187,7 +187,8 @@ class DiscoveryTest {
         val s = Suggestion.fromJson(JSONObject(onDisk))!!
         assertEquals(null, s.albumId)
         assertEquals(null, s.cover)
-        assertEquals(DownloadRequest.Artist("3", 10), DiscoveryActions.requestFor(s))
+        assertEquals(DownloadRequest.Artist("3", 10), DiscoveryActions.requestFor(s, 10))
+        assertEquals(DownloadRequest.Artist("3", 0), DiscoveryActions.requestFor(s)) // sans précision : toute la discographie
         // Garde-fou : le texte « null » (ce que renvoie optString sur Android) n'est jamais pris pour un identifiant.
         val asText = Suggestion.fromJson(JSONObject(onDisk.replace("\"albumId\":null", "\"albumId\":\"null\"")))!!
         assertEquals(null, asText.albumId)
@@ -226,5 +227,10 @@ class DiscoveryTest {
         assertEquals(DiscoveryTuning.MAX_SEEDS, seeds.size)
         assertFalse(seeds.any { it.name == "Artiste 1" })
         assertNotNull(seeds.firstOrNull())
+    }
+
+    @Test fun `le dossier d'attente du bot n'est pas un album`() {
+        assertTrue(isTempDownloadAlbum(".telechargement") && isTempDownloadAlbum("  .telechargement "))
+        assertFalse(isTempDownloadAlbum("telechargement") || isTempDownloadAlbum(".38 Special") || isTempDownloadAlbum(""))
     }
 }

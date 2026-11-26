@@ -191,17 +191,20 @@ object DiscoveryRunner {
 
 /** Lance un téléchargement à partir d'une suggestion, via le serveur de téléchargement de l'utilisateur. */
 object DiscoveryActions {
-    /** Un album pour une sortie récente, les 10 titres les plus populaires pour un artiste. */
-    fun requestFor(s: Suggestion): DownloadRequest =
-        if (s.albumId != null) DownloadRequest.Album(s.albumId) else DownloadRequest.Artist(s.artistId, 10)
+    /**
+     * Un album pour une sortie récente. Pour un artiste, [count] titres parmi les plus populaires, ou toute sa
+     * discographie studio si [count] vaut 0 (le choix est laissé à l'utilisateur).
+     */
+    fun requestFor(s: Suggestion, count: Int = 0): DownloadRequest =
+        if (s.albumId != null) DownloadRequest.Album(s.albumId) else DownloadRequest.Artist(s.artistId, count)
 
     /** Renvoie le message à afficher. */
-    suspend fun download(context: Context, s: Suggestion): String {
+    suspend fun download(context: Context, s: Suggestion, count: Int = 0): String {
         val app = context.applicationContext
         DownloadServerStore.init(app)
         val config = DownloadServerStore.config.value ?: return "Serveur de téléchargement non configuré"
         val client = DownloadServerClient.create(config)
-        val request = requestFor(s)
+        val request = requestFor(s, count)
         return try {
             val task = when (request) {
                 is DownloadRequest.Album -> client.downloadAlbum(request.id)

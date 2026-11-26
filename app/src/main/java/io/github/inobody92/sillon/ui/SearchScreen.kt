@@ -124,7 +124,7 @@ class SearchViewModel(private val client: SynoClient) : ViewModel() {
                 }
                 _state.value = _state.value.copy(
                     artists = results.first,
-                    albums = results.second,
+                    albums = results.second.filterNot { io.github.inobody92.sillon.data.isTempDownloadAlbum(it.name) },
                     songs = results.third,
                     loading = false,
                 )
