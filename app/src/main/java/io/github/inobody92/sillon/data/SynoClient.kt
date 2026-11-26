@@ -714,14 +714,17 @@ class SynoClient(val creds: Credentials) {
             JSONObject(resp.body?.string() ?: throw IOException("Réponse vide"))
         }
 
-    private fun errorCode(json: JSONObject): Int = json.optJSONObject("error")?.optInt("code", -1) ?: -1
-
     companion object {
         private const val PLAYLIST = "SYNO.AudioStation.Playlist"
         private val SESSION_ERRORS = setOf(106, 107, 119)
         private val FILE_SESSION_ERRORS = setOf(105, 106, 107, 119)
         private const val FILE_NOT_FOUND = 408
         private const val ERROR_OTP_REQUIRED = 403
+
+        /** La réponse JSON [body] du NAS signale une session expirée ou qui n'est plus valable. */
+        fun isSessionError(body: String): Boolean = runCatching { errorCode(JSONObject(body)) in SESSION_ERRORS }.getOrDefault(false)
+
+        private fun errorCode(json: JSONObject): Int = json.optJSONObject("error")?.optInt("code", -1) ?: -1
 
         /** Clé de cache stable pour une URL : on retire le sid, qui change à chaque connexion. */
         fun stableKey(url: String): String =
