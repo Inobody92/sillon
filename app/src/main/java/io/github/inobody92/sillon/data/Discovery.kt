@@ -71,6 +71,14 @@ interface DiscoverySource {
     suspend fun latestAlbums(artistId: String, limit: Int): List<DzAlbum>
 }
 
+/**
+ * Texte d'une clé, ou null si elle est absente, nulle ou vide. À utiliser à la place de `optString(...).ifBlank`, car sur
+ * Android `optString` renvoie le texte « null » pour une valeur JSON nulle (pas sur la JVM des tests) : un identifiant
+ * d'album « null » était alors envoyé au serveur pour les suggestions d'artistes.
+ */
+internal fun JSONObject.stringOrNull(key: String): String? =
+    if (!has(key) || isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
+
 internal fun parseDzArtists(json: JSONObject): List<DzArtist> {
     val data = json.optJSONArray("data") ?: return emptyList()
     return List(data.length()) { data.getJSONObject(it) }.mapNotNull { a ->
@@ -78,7 +86,7 @@ internal fun parseDzArtists(json: JSONObject): List<DzArtist> {
         DzArtist(
             id, a.optString("name"),
             if (a.has("nb_fan") && !a.isNull("nb_fan")) a.optLong("nb_fan") else null,
-            a.optString("picture_medium").ifBlank { null },
+            a.stringOrNull("picture_medium"),
         )
     }
 }
@@ -87,11 +95,11 @@ internal fun parseDzAlbums(json: JSONObject): List<DzAlbum> {
     val data = json.optJSONArray("data") ?: return emptyList()
     return List(data.length()) { data.getJSONObject(it) }.mapNotNull { a ->
         val id = a.opt("id")?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        val type = a.optString("record_type")
-        val date = a.optString("release_date")
+        val type = a.stringOrNull("record_type").orEmpty()
+        val date = a.stringOrNull("release_date").orEmpty()
         // Pas de singles (on propose des albums) ni d'album sans date (impossible de dire s'il est récent).
         if (type !in setOf("album", "ep") || date.isBlank()) return@mapNotNull null
-        DzAlbum(id, a.optString("title"), date, type, a.optString("cover_medium").ifBlank { null })
+        DzAlbum(id, a.optString("title"), date, type, a.stringOrNull("cover_medium"))
     }.sortedByDescending { it.date }
 }
 
@@ -162,9 +170,9 @@ data class Suggestion(
         fun fromJson(o: JSONObject): Suggestion? = runCatching {
             Suggestion(
                 o.getString("key"), SuggestionKind.valueOf(o.getString("kind")), o.getString("title"), o.getString("artist"),
-                o.getString("reason"), o.optString("cover").ifBlank { null }, o.getString("artistId"),
-                o.optString("albumId").ifBlank { null }, if (o.isNull("fans")) null else o.getLong("fans"),
-                o.optString("date").ifBlank { null },
+                o.getString("reason"), o.stringOrNull("cover"), o.getString("artistId"),
+                o.stringOrNull("albumId"), if (o.isNull("fans")) null else o.getLong("fans"),
+                o.stringOrNull("date"),
             )
         }.getOrNull()
     }

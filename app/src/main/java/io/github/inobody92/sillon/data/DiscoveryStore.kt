@@ -56,7 +56,8 @@ object DiscoveryStore {
             val json = JSONObject(file.readText())
             val arr = json.optJSONArray("suggestions") ?: JSONArray()
             val list = List(arr.length()) { Suggestion.fromJson(arr.getJSONObject(it)) }.filterNotNull()
-            _state.value = DiscoveryState(json.optString("date").ifBlank { null }, list)
+            _state.value = DiscoveryState(json.stringOrNull("date"), list)
+            Log.d("SillonDiscovery", "relues : " + list.joinToString { "${it.title}(album=${it.albumId})" })
             json.optJSONObject("dismissed")?.let { o -> o.keys().forEach { dismissed[it] = o.getLong(it) } }
             json.optJSONObject("proposed")?.let { o -> o.keys().forEach { proposed[it] = o.getLong(it) } }
         }
@@ -190,15 +191,23 @@ object DiscoveryRunner {
 
 /** Lance un téléchargement à partir d'une suggestion, via le serveur de téléchargement de l'utilisateur. */
 object DiscoveryActions {
+    /** Un album pour une sortie récente, les 10 titres les plus populaires pour un artiste. */
+    fun requestFor(s: Suggestion): DownloadRequest =
+        if (s.albumId != null) DownloadRequest.Album(s.albumId) else DownloadRequest.Artist(s.artistId, 10)
+
     /** Renvoie le message à afficher. */
     suspend fun download(context: Context, s: Suggestion): String {
         val app = context.applicationContext
         DownloadServerStore.init(app)
         val config = DownloadServerStore.config.value ?: return "Serveur de téléchargement non configuré"
         val client = DownloadServerClient.create(config)
-        val request = if (s.albumId != null) DownloadRequest.Album(s.albumId) else DownloadRequest.Artist(s.artistId, 10)
+        val request = requestFor(s)
         return try {
-            val task = if (s.albumId != null) client.downloadAlbum(s.albumId) else client.downloadArtist(s.artistId, 10)
+            val task = when (request) {
+                is DownloadRequest.Album -> client.downloadAlbum(request.id)
+                is DownloadRequest.Artist -> client.downloadArtist(request.id, request.count)
+                else -> error("demande inattendue")
+            }
             DownloadRequestLog(app).remember(task.number, task.name, request)
             DownloadWatch.watch(app, task.number)
             DiscoveryStore.init(app)

@@ -180,6 +180,30 @@ class DiscoveryTest {
         assertEquals(null, Suggestion.fromJson(JSONObject("""{"kind":"?"}""")))
     }
 
+    @Test fun `une suggestion d'artiste relue du disque n'a pas d'identifiant d'album`() {
+        // Ce que contient le fichier enregistré pour une suggestion d'artiste : des valeurs JSON nulles.
+        val onDisk = """{"key":"artist:3","kind":"UNDERGROUND","title":"UFO","artist":"UFO","reason":"Pépite","cover":null,
+            "artistId":"3","albumId":null,"fans":68000,"date":null}"""
+        val s = Suggestion.fromJson(JSONObject(onDisk))!!
+        assertEquals(null, s.albumId)
+        assertEquals(null, s.cover)
+        assertEquals(DownloadRequest.Artist("3", 10), DiscoveryActions.requestFor(s))
+        // Garde-fou : le texte « null » (ce que renvoie optString sur Android) n'est jamais pris pour un identifiant.
+        val asText = Suggestion.fromJson(JSONObject(onDisk.replace("\"albumId\":null", "\"albumId\":\"null\"")))!!
+        assertEquals(null, asText.albumId)
+    }
+
+    @Test fun `une sortie se telecharge comme un album`() {
+        val s = Suggestion("album:10", SuggestionKind.NEW_RELEASE, "Budapest", "Queen", "r", null, "1", "10", null, "2026-11-06")
+        assertEquals(DownloadRequest.Album("10"), DiscoveryActions.requestFor(s))
+    }
+
+    @Test fun `stringOrNull ignore l'absent, le nul et le texte null`() {
+        val o = JSONObject("""{"a":"x","b":null,"c":"","d":"null"}""")
+        assertEquals("x", o.stringOrNull("a"))
+        assertEquals(listOf(null, null, null, null), listOf("b", "c", "d", "absent").map { o.stringOrNull(it) })
+    }
+
     // --- artistes de départ ---
 
     private fun song(id: String, artist: String) = Song(id, "t$id", artist, "alb", "", 1, 1, 200, "mp3", "Rock")
