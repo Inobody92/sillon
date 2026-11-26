@@ -79,10 +79,20 @@ object SessionHolder {
     @Synchronized
     fun restore(context: android.content.Context): SynoClient? {
         client?.let { return it }
-        val creds = SecureStore(context).load() ?: return null
-        val restored = SynoClient(creds)
+        val store = SecureStore(context)
+        val creds = store.load() ?: return null
+        if (creds.insecure && creds.pinnedSha256 == null) return null
+        val restored = SynoClient(creds) { store.saveDeviceId(it) }
+        // Session mémorisée : on la reprend sans réseau ni nouvelle connexion (dans la voiture, la couverture est
+        // souvent mauvaise). Si elle a expiré, le premier appel refusé se reconnecte tout seul (voir [SynoClient.call]).
+        store.loadSession(sessionOwner(creds))?.let { snapshot ->
+            restored.adopt(snapshot)
+            client = restored
+            return restored
+        }
         return try {
             kotlinx.coroutines.runBlocking { restored.connect() }
+            restored.snapshot()?.let { store.saveSession(sessionOwner(creds), it) }
             client = restored
             restored
         } catch (_: Exception) {
@@ -95,7 +105,11 @@ object SessionHolder {
  * Client minimal pour l'API web Audio Station (voir docs/API.md).
  * Les chemins des APIs sont découverts via query.cgi, jamais codés en dur.
  */
-class SynoClient(val creds: Credentials) {
+class SynoClient(
+    val creds: Credentials,
+    /** Le NAS a remis un (nouvel) identifiant d'appareil de confiance : à enregistrer tout de suite. */
+    private val onTrustedDevice: (String) -> Unit = {},
+) {
 
     val http: OkHttpClient = buildHttp(creds)
 
@@ -572,10 +586,12 @@ class SynoClient(val creds: Credentials) {
         val params = mutableMapOf(
             "account" to creds.account, "passwd" to creds.password, "session" to "FileStation", "format" to "sid",
         )
-        deviceId?.let { params["device_id"] = it } // appareil de confiance : pas de nouveau code à deux facteurs
+        trustedDeviceParams(params, otp = null) // appareil de confiance : pas de nouveau code à deux facteurs
         val json = post("SYNO.API.Auth", "login", params = params, withSid = false, raise = false)
         if (!json.optBoolean("success")) throw ApiException(errorCode(json), "Connexion File Station impossible (code ${errorCode(json)})")
-        return json.getJSONObject("data").getString("sid").also { fileSid = it }
+        val data = json.getJSONObject("data")
+        rememberTrustedDevice(data)
+        return data.getString("sid").also { fileSid = it }
     }
 
     /** Écrit [data] dans [dir]/[name] sur le NAS (dossiers créés au besoin, fichier remplacé s'il existe). */
@@ -671,12 +687,7 @@ class SynoClient(val creds: Credentials) {
             "session" to "AudioStation",
             "format" to "sid",
         )
-        if (otp != null) {
-            params["otp_code"] = otp
-            params["enable_device_token"] = "yes"
-            params["device_name"] = "Sillon"
-        }
-        deviceId?.let { params["device_id"] = it }
+        trustedDeviceParams(params, otp)
         val json = post("SYNO.API.Auth", "login", params = params, withSid = false, raise = false)
         if (!json.optBoolean("success")) {
             val code = errorCode(json)
@@ -685,7 +696,33 @@ class SynoClient(val creds: Credentials) {
         }
         val data = json.getJSONObject("data")
         sid = data.getString("sid")
-        data.optString("did").takeIf { it.isNotBlank() }?.let { deviceId = it }
+        rememberTrustedDevice(data)
+    }
+
+    /**
+     * Identifiant d'appareil de confiance renvoyé par le NAS (`did`, ou `device_id` selon les versions de DSM).
+     * Il peut être renouvelé à n'importe quelle connexion, pas seulement après un code OTP : on garde toujours le
+     * dernier, sinon le NAS ne reconnaît plus le téléphone au prochain lancement.
+     */
+    private fun rememberTrustedDevice(data: JSONObject) {
+        val did = data.optString("did").ifBlank { data.optString("device_id") }.takeIf { it.isNotBlank() } ?: return
+        if (did == deviceId) return
+        deviceId = did
+        runCatching { onTrustedDevice(did) }
+    }
+
+    /**
+     * Double authentification. Après un code OTP, le NAS renvoie un identifiant d'appareil de confiance (`did`).
+     * DSM 7 ne le reconnaît que s'il est accompagné du même `device_name` que lors de son émission : sans ce nom,
+     * le NAS redemande un code à chaque reconnexion (session expirée, réseau qui change, Android Auto…).
+     */
+    private fun trustedDeviceParams(params: MutableMap<String, String>, otp: String?) {
+        otp?.let { params["otp_code"] = it }
+        // Comme les clients qui fonctionnent avec DSM 7 (Home Assistant, entre autres) : l'appareil de confiance est
+        // demandé à CHAQUE connexion, toujours sous le même nom, avec l'identifiant déjà obtenu s'il existe.
+        params["enable_device_token"] = "yes"
+        params["device_name"] = DEVICE_NAME
+        deviceId?.let { params["device_id"] = it }
     }
 
     private fun post(
@@ -711,7 +748,13 @@ class SynoClient(val creds: Credentials) {
     private fun execute(request: Request): JSONObject =
         http.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            JSONObject(resp.body?.string() ?: throw IOException("Réponse vide"))
+            val body = resp.body?.string() ?: throw IOException("Réponse vide")
+            // Page HTML d'un portail captif, d'un relais ou d'un proxy : c'est le réseau qui flanche, pas le compte.
+            try {
+                JSONObject(body)
+            } catch (e: org.json.JSONException) {
+                throw IOException("Réponse inattendue du serveur", e)
+            }
         }
 
     private fun errorCode(json: JSONObject): Int = json.optJSONObject("error")?.optInt("code", -1) ?: -1
@@ -722,6 +765,8 @@ class SynoClient(val creds: Credentials) {
         private val FILE_SESSION_ERRORS = setOf(105, 106, 107, 119)
         private const val FILE_NOT_FOUND = 408
         private const val ERROR_OTP_REQUIRED = 403
+        /** Nom de l'appareil de confiance : ne doit jamais changer, sinon le NAS redemande un code OTP. */
+        private const val DEVICE_NAME = "Sillon"
 
         /** Clé de cache stable pour une URL : on retire le sid, qui change à chaque connexion. */
         fun stableKey(url: String): String =

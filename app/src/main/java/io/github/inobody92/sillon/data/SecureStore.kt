@@ -66,8 +66,11 @@ class SecureStore(context: Context) {
         )
     }.getOrNull()
 
-    /** Dernières valeurs saisies, pour préremplir l'écran de connexion (sans mot de passe). */
-    fun lastUrl(): String = prefs.getString(K_URL, "") ?: ""
+    /**
+     * Dernières valeurs saisies, pour préremplir l'écran de connexion (sans mot de passe). Avec QuickConnect, on
+     * propose l'ID plutôt que l'adresse qu'il a donnée, qui peut changer.
+     */
+    fun lastUrl(): String = prefs.getString(K_QC, null) ?: prefs.getString(K_URL, "") ?: ""
     fun lastAccount(): String = prefs.getString(K_ACCOUNT, "") ?: ""
     fun lastInsecure(): Boolean = prefs.getBoolean(K_INSECURE, false)
 
@@ -89,6 +92,34 @@ class SecureStore(context: Context) {
     fun clearDownloadServer() {
         prefs.edit().remove(K_DS_URL).remove(K_DS_TOKEN).remove(K_DS_PIN).apply()
     }
+
+    /** Vrai pour le même compte sur le même NAS (même adresse, ou même ID QuickConnect si l'adresse a changé). */
+    private fun sameNas(url: String, quickConnectId: String?, account: String): Boolean =
+        prefs.getString(K_ACCOUNT, null) == account &&
+            (prefs.getString(K_URL, null) == url || (quickConnectId != null && prefs.getString(K_QC, null) == quickConnectId))
+
+    /**
+     * Appareil de confiance (double authentification) mémorisé pour ce compte sur ce NAS, y compris quand l'adresse
+     * QuickConnect a changé entre-temps.
+     */
+    fun trustedDevice(url: String, quickConnectId: String?, account: String): String? =
+        if (sameNas(url, quickConnectId, account)) load()?.deviceId else null
+
+    /**
+     * Nouvel identifiant d'appareil de confiance remis par le NAS. Passe par [load] et [save] : il est stocké
+     * exactement comme le reste des identifiants.
+     */
+    fun saveDeviceId(id: String) {
+        val current = load() ?: return
+        if (current.deviceId != id) save(current.copy(deviceId = id))
+    }
+
+    /** Mot de passe enregistré pour ce NAS et ce compte : évite de le retaper quand le NAS redemande un code. */
+    fun savedPassword(url: String, quickConnectId: String?, account: String): String? =
+        if (sameNas(url, quickConnectId, account)) load()?.password else null
+
+    /** Un mot de passe est enregistré (l'utilisateur ne s'est pas déconnecté). */
+    fun hasPassword(): Boolean = load() != null
 
     /** Oublie le mot de passe mais garde l'adresse, le compte et le device de confiance. */
     fun forgetPassword() {
@@ -141,3 +172,6 @@ class SecureStore(context: Context) {
         const val K_DS_PIN = "download_server_pin"
     }
 }
+
+/** Propriétaire d'une session mémorisée : une session n'est reprise que pour la même adresse et le même compte. */
+fun sessionOwner(c: Credentials): String = c.url + "|" + c.account
