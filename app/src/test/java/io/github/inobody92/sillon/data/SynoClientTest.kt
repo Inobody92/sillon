@@ -68,6 +68,49 @@ class SynoClientTest {
         client(deviceId = "DEVICE").connect()
     }
 
+    @Test fun lAppareilDeConfianceEstEnvoyeAvecSonNom() = runBlocking {
+        dsm.otp = "123456"
+        client(deviceId = "DEVICE").connect()
+        val login = dsm.requests.last { it["method"] == "login" }
+        assertEquals("DEVICE", login["device_id"])
+        assertEquals("Sillon", login["device_name"])
+        assertEquals("yes", login["enable_device_token"])
+        assertEquals(null, login["otp_code"])
+    }
+
+    @Test fun lIdentifiantDAppareilRemisParLeNasEstSignalePourEtreEnregistre() = runBlocking {
+        dsm.otp = "123456"
+        val saved = mutableListOf<String>()
+        val c = SynoClient(Credentials(server.url("/").toString().trimEnd('/'), "maxime", "secret", false)) { saved += it }
+        c.connect(otp = "123456")
+        assertEquals(listOf("DEVICE"), saved)
+        // Reconnexion (session expirée) : même identifiant, rien de nouveau à enregistrer.
+        dsm.expireSessionTimes = 1
+        c.albums(0, 10)
+        assertEquals(listOf("DEVICE"), saved)
+    }
+
+    @Test fun sessionExpireeAvecDoubleAuthentificationPasDeNouveauCode() = runBlocking {
+        dsm.otp = "123456"
+        val c = client()
+        c.connect(otp = "123456")
+        dsm.expireSessionTimes = 1
+        // La reconnexion automatique passe par l'appareil de confiance : aucun code OTP n'est redemandé.
+        assertEquals(1, c.albums(0, 10).size)
+    }
+
+    @Test fun uneReponseQuiNEstPasDuJsonEstUneErreurReseau() {
+        server.shutdown()
+        server = MockWebServer().apply {
+            dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) =
+                    okhttp3.mockwebserver.MockResponse().setBody("<html>Portail captif</html>")
+            }
+            start()
+        }
+        assertThrows(java.io.IOException::class.java) { runBlocking { client().connect() } }
+    }
+
     @Test fun sessionExpireeLeClientSeReconnecteEtReessaieUneFois() = runBlocking {
         val c = client()
         c.connect()
