@@ -44,6 +44,14 @@ data class Album(val name: String, val albumArtist: String, val artist: String, 
     val displayArtist: String get() = albumArtist.ifBlank { artist }
 }
 
+/**
+ * Extension de fichier sûre : elle vient du chemin du fichier sur le NAS et sert à nommer des fichiers locaux.
+ * Tout ce qui n'est pas 1 à 5 lettres ou chiffres est remplacé par une chaîne vide (format inconnu).
+ */
+fun safeExtension(ext: String): String = ext.lowercase().takeIf { SAFE_EXTENSION.matches(it) }.orEmpty()
+
+private val SAFE_EXTENSION = Regex("^[a-z0-9]{1,5}$")
+
 data class Song(
     val id: String,
     val title: String,
