@@ -3,7 +3,7 @@ package io.github.inobody92.sillon.playback
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.Process
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -30,6 +30,7 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
@@ -78,6 +79,7 @@ class PlaybackService : MediaLibraryService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val equalizer = EqualizerEffect()
     private lateinit var tree: LibraryTree
+    private lateinit var callers: CallerPolicy
 
     /** Morceau pour lequel on a déjà tenté une reconnexion (évite les boucles). */
     private var retriedMediaId: String? = null
@@ -100,6 +102,7 @@ class PlaybackService : MediaLibraryService() {
         Likes.init(applicationContext)
         TasteStore.init(applicationContext) // goûts, titres masqués et statistiques d'écoute (aussi sans l'application ouverte)
         tree = LibraryTree(applicationContext)
+        callers = CallerPolicy(applicationContext)
 
         // Réutilise le client HTTP de la session (certificat auto-signé compris).
         val callFactory = Call.Factory { request ->
@@ -465,6 +468,21 @@ class PlaybackService : MediaLibraryService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
+            val caller = callers.classify(controller)
+            Log.i(TAG_CALLERS, "connexion de ${controller.packageName} (uid ${controller.uid}) : $caller")
+            if (caller == CallerClass.UNKNOWN) {
+                // Application inconnue : commandes de lecture seulement (lecture, pause, suivant, volume…).
+                // Ni parcours de la bibliothèque, ni ajout à la file, ni « j'aime ». Jamais de refus complet :
+                // un contrôleur légitime mais imprévu (accessoire, montre d'une autre marque) garde l'essentiel.
+                val playback = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    .remove(Player.COMMAND_SET_MEDIA_ITEM)
+                    .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(SessionCommands.EMPTY)
+                    .setAvailablePlayerCommands(playback)
+                    .build()
+            }
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                 .add(LIKE_COMMAND)
                 .add(SLEEP_COMMAND)
@@ -569,7 +587,7 @@ class PlaybackService : MediaLibraryService() {
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
-        ): ListenableFuture<MutableList<MediaItem>> = scope.future { resolve(mediaItems, isSelf(controller)).toMutableList() }
+        ): ListenableFuture<MutableList<MediaItem>> = scope.future { resolve(mediaItems, callers.isSelf(controller)).toMutableList() }
 
         override fun onSetMediaItems(
             mediaSession: MediaSession,
@@ -588,7 +606,7 @@ class PlaybackService : MediaLibraryService() {
                     return@future MediaSession.MediaItemsWithStartPosition(siblings, index, startPositionMs)
                 }
             }
-            val resolved = resolve(mediaItems, isSelf(controller))
+            val resolved = resolve(mediaItems, callers.isSelf(controller))
             val start = if (resolved.size == mediaItems.size) startIndex else 0
             MediaSession.MediaItemsWithStartPosition(
                 resolved,
@@ -597,12 +615,6 @@ class PlaybackService : MediaLibraryService() {
             )
         }
     }
-
-    /**
-     * L'appelant est Sillon lui-même. Décidé par l'UID, fourni par Android : le nom de paquet d'un contrôleur
-     * Media3 est déclaré par l'appelant lui-même et peut être falsifié.
-     */
-    private fun isSelf(controller: MediaSession.ControllerInfo): Boolean = controller.uid == Process.myUid()
 
     /**
      * Remplace les éléments « sans adresse » (identifiants de conteneurs, requêtes vocales) par de vrais titres.
@@ -642,6 +654,7 @@ class PlaybackService : MediaLibraryService() {
         const val RADIO_LOW_WATER = 5
         const val PREFETCH_AHEAD = 2
         const val SLEEP_FADE_MS = 8_000L
+        const val TAG_CALLERS = "SillonAppelants"
         val LIKE_COMMAND = SessionCommand("sillon.TOGGLE_LIKE", Bundle.EMPTY)
         val SLEEP_COMMAND = SessionCommand("sillon.SLEEP", Bundle.EMPTY)
     }
